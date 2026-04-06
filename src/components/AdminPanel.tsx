@@ -30,12 +30,32 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   onPauseAccess
 }) => {
   const { t } = useTranslation();
-  const [activeTab, setActiveTab] = useState<'users' | 'payments'>('payments');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'users' | 'payments' | 'plans' | 'features'>('dashboard');
 
   return (
     <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
       <div className="border-b border-gray-200 dark:border-gray-700">
-        <nav className="flex gap-4 px-6" aria-label="Tabs">
+        <nav className="flex gap-4 px-6 overflow-x-auto" aria-label="Tabs">
+          <button
+            onClick={() => setActiveTab('dashboard')}
+            className={`py-4 px-1 border-b-2 font-medium text-sm ${
+              activeTab === 'dashboard'
+                ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
+            }`}
+          >
+            Dashboard
+          </button>
+          <button
+            onClick={() => setActiveTab('users')}
+            className={`py-4 px-1 border-b-2 font-medium text-sm ${
+              activeTab === 'users'
+                ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
+            }`}
+          >
+            {t('admin.users')}
+          </button>
           <button
             onClick={() => setActiveTab('payments')}
             className={`py-4 px-1 border-b-2 font-medium text-sm ${
@@ -52,54 +72,30 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             )}
           </button>
           <button
-            onClick={() => setActiveTab('users')}
+            onClick={() => setActiveTab('plans')}
             className={`py-4 px-1 border-b-2 font-medium text-sm ${
-              activeTab === 'users'
+              activeTab === 'plans'
                 ? 'border-blue-500 text-blue-600 dark:text-blue-400'
                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
             }`}
           >
-            {t('admin.users')}
+            Planos
+          </button>
+          <button
+            onClick={() => setActiveTab('features')}
+            className={`py-4 px-1 border-b-2 font-medium text-sm ${
+              activeTab === 'features'
+                ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
+            }`}
+          >
+            Recursos
           </button>
         </nav>
       </div>
 
       <div className="p-6">
-        {activeTab === 'payments' && (
-          <div className="space-y-4">
-            {paymentRequests.filter(r => r.status === 'pending').length === 0 ? (
-              <p className="text-gray-500 dark:text-gray-400 text-sm">Nenhuma solicitação pendente.</p>
-            ) : (
-              paymentRequests.filter(r => r.status === 'pending').map(request => (
-                <div key={request.id} className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700">
-                  <div>
-                    <p className="font-medium text-gray-900 dark:text-white">{request.userEmail}</p>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">
-                      Plano: {request.plan === 'monthly' ? 'Mensal' : 'Anual'}
-                    </p>
-                  </div>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => onApprovePayment(request.id, request.userId)}
-                      className="flex items-center gap-1 px-3 py-1.5 bg-green-100 text-green-700 hover:bg-green-200 rounded-md text-sm font-medium transition-colors"
-                    >
-                      <Check className="w-4 h-4" />
-                      {t('admin.approve')}
-                    </button>
-                    <button
-                      onClick={() => onRejectPayment(request.id, request.userId)}
-                      className="flex items-center gap-1 px-3 py-1.5 bg-red-100 text-red-700 hover:bg-red-200 rounded-md text-sm font-medium transition-colors"
-                    >
-                      <X className="w-4 h-4" />
-                      {t('admin.reject')}
-                    </button>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        )}
-
+        {activeTab === 'dashboard' && <div className="text-gray-500">Dashboard em desenvolvimento.</div>}
         {activeTab === 'users' && (
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
@@ -157,6 +153,42 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             </table>
           </div>
         )}
+        {activeTab === 'payments' && (
+          <div className="space-y-4">
+            {paymentRequests.filter(r => r.status === 'pending').length === 0 ? (
+              <p className="text-gray-500 dark:text-gray-400 text-sm">Nenhuma solicitação pendente.</p>
+            ) : (
+              paymentRequests.filter(r => r.status === 'pending').map(request => (
+                <div key={request.id} className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700">
+                  <div>
+                    <p className="font-medium text-gray-900 dark:text-white">{request.userEmail}</p>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                      Plano: {request.plan === 'monthly' ? 'Mensal' : 'Anual'}
+                    </p>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => onApprovePayment(request.id, request.userId)}
+                      className="flex items-center gap-1 px-3 py-1.5 bg-green-100 text-green-700 hover:bg-green-200 rounded-md text-sm font-medium transition-colors"
+                    >
+                      <Check className="w-4 h-4" />
+                      {t('admin.approve')}
+                    </button>
+                    <button
+                      onClick={() => onRejectPayment(request.id, request.userId)}
+                      className="flex items-center gap-1 px-3 py-1.5 bg-red-100 text-red-700 hover:bg-red-200 rounded-md text-sm font-medium transition-colors"
+                    >
+                      <X className="w-4 h-4" />
+                      {t('admin.reject')}
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+        {activeTab === 'plans' && <div className="text-gray-500">Configurações de Plano em desenvolvimento.</div>}
+        {activeTab === 'features' && <div className="text-gray-500">Controles de Recursos em desenvolvimento.</div>}
       </div>
     </div>
   );

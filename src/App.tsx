@@ -152,12 +152,18 @@ export default function App() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [userRole, setUserRole] = useState<'student' | 'teacher'>('student');
   
-  // Admin State
-  const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
-  const [paymentRequests, setPaymentRequests] = useState<any[]>([]);
-  
+  const handleLogout = async () => {
+    await logout();
+    sessionStorage.removeItem('google_access_token');
+    localStorage.removeItem('active_tab');
+    setUser(null);
+    setUserProfile(null);
+    setTasks([]);
+    setAllUsers([]);
+    setPaymentRequests([]);
+  };
+
   const triggerNotification = (title: string, options: NotificationOptions) => {
-    if ('Notification' in window && Notification.permission === 'granted') {
       try {
         new Notification(title, options);
       } catch (e) {
@@ -1446,7 +1452,7 @@ export default function App() {
             ) : activeTab === 'reminders' ? (
               <RemindersView tasks={tasks.filter(t => t.reminderConfig)} />
             ) : activeTab === 'settings' ? (
-              <SettingsView userProfile={userProfile} setActiveTab={setActiveTab} onLogout={logout} />
+              <SettingsView userProfile={userProfile} setActiveTab={setActiveTab} onLogout={handleLogout} />
             ) : activeTab === 'admin' && userProfile?.role_user === 'admin' ? (
               <AdminPanel 
                 users={allUsers}
