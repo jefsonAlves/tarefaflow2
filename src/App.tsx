@@ -133,10 +133,10 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
   }
 }
 
-import { Task, TaskStatus, ReminderConfig, StudentProfileType, AcademicTerm, Subject, UserProfile } from './types';
+import { Task, TaskStatus, ReminderConfig, StudentProfileType, AcademicTerm, Subject, UserProfile, Note } from './types';
 
 import { Sidebar } from './components/Sidebar';
-import { TaskCard } from './components/TaskCard';
+import { CheckSquare, BookOpen, StickyNote, X } from 'lucide-react';
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -2366,44 +2366,6 @@ function CreateTaskModal({ onClose, userId, categories, setCategories, onTaskCre
 }
 
 // --- New View Components ---
-
-function SubjectsView({ subjects, terms, onAddSubject }: { subjects: Subject[], terms: AcademicTerm[], onAddSubject: () => void }) {
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h2 className="text-xl font-bold text-slate-800">Minhas Disciplinas</h2>
-        <button onClick={onAddSubject} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl font-bold text-sm hover:bg-blue-700 transition-all">
-          <Plus className="w-4 h-4" />
-          Nova Disciplina
-        </button>
-      </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {subjects.map(subject => (
-          <div key={subject.id} className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 hover:shadow-md transition-all group">
-            <div className="flex items-center justify-between mb-4">
-              <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white font-bold" style={{ backgroundColor: subject.color }}>
-                {subject.name.charAt(0).toUpperCase()}
-              </div>
-              <button className="text-slate-400 hover:text-slate-600 opacity-0 group-hover:opacity-100 transition-all">
-                <Settings className="w-4 h-4" />
-              </button>
-            </div>
-            <h3 className="font-bold text-slate-800 mb-1">{subject.name}</h3>
-            <p className="text-xs text-slate-500">
-              {terms.find(t => t.id === subject.termId)?.name || 'Sem período definido'}
-            </p>
-          </div>
-        ))}
-        {subjects.length === 0 && (
-          <div className="col-span-full py-12 text-center bg-white rounded-3xl border-2 border-dashed border-slate-200">
-            <BookOpen className="w-12 h-12 text-slate-300 mx-auto mb-4" />
-            <p className="text-slate-500 font-medium">Nenhuma disciplina cadastrada ainda.</p>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
 
 function SubjectsView({ subjects, terms, onAddSubject }: { subjects: Subject[], terms: AcademicTerm[], onAddSubject: () => void }) {
   return (
