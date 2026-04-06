@@ -156,6 +156,22 @@ export default function App() {
   const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
   const [paymentRequests, setPaymentRequests] = useState<any[]>([]);
   
+  const triggerNotification = (title: string, options: NotificationOptions) => {
+    if ('Notification' in window && Notification.permission === 'granted') {
+      try {
+        new Notification(title, options);
+      } catch (e) {
+        console.error("Notification error:", e);
+        // Fallback: try using service worker if available
+        if ('serviceWorker' in navigator) {
+          navigator.serviceWorker.ready.then(registration => {
+            registration.showNotification(title, options);
+          }).catch(err => console.error("Service Worker Notification error:", err));
+        }
+      }
+    }
+  };
+  
   // Academic Structure State
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [profileType, setProfileType] = useState<StudentProfileType>('school');
@@ -320,7 +336,7 @@ export default function App() {
           
           if (nextReminderTime <= now) {
             // Trigger Notification
-            new Notification(`Lembrete: ${task.title}`, {
+            triggerNotification(`Lembrete: ${task.title}`, {
               body: task.description || 'Você tem uma tarefa pendente.',
               icon: '/favicon.ico'
             });
@@ -366,7 +382,7 @@ export default function App() {
 
           // Notify if due within 24 hours and not already notified
           if (diffHours > 0 && diffHours <= 24 && !notifiedTasks[task.id]) {
-            new Notification(`Tarefa Próxima do Prazo: ${task.title}`, {
+            triggerNotification(`Tarefa Próxima do Prazo: ${task.title}`, {
               body: `Vence em ${Math.round(diffHours)} horas.`,
               icon: '/favicon.ico'
             });
@@ -1546,7 +1562,7 @@ export default function App() {
         {showCreateModal && (
           <CreateTaskModal 
             onClose={() => setShowCreateModal(false)} 
-            userId={user.uid}
+            userId={user?.uid || ''}
             categories={customCategories}
             setCategories={setCustomCategories}
             initialRole={roleFilter === 'all' ? 'student' : roleFilter}
