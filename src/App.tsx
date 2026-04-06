@@ -675,7 +675,10 @@ export default function App() {
   };
 
   const syncGoogleTasks = async () => {
-    if (!user || !accessToken) return;
+    if (!user || !accessToken) {
+      if (!accessToken) handleSignIn();
+      return;
+    }
     setIsSyncingTasks(true);
     try {
       // 1. Fetch from Google
@@ -686,7 +689,11 @@ export default function App() {
       });
       const googleTasks = await res.json();
       
-      if (!Array.isArray(googleTasks)) throw new Error("Failed to fetch Google Tasks");
+      if (!res.ok) {
+        throw new Error(googleTasks.error || "Failed to fetch Google Tasks");
+      }
+      
+      if (!Array.isArray(googleTasks)) throw new Error("Invalid response from Google Tasks");
 
       // 2. Bidirectional Sync with Conflict Resolution (Local Priority)
       for (const gTask of googleTasks) {
@@ -764,7 +771,9 @@ export default function App() {
           errorMessage.toLowerCase().includes("credentials")) {
         setAccessToken(null);
         sessionStorage.removeItem('google_access_token');
+        alert("Sua sessão do Google expirou. Por favor, faça login novamente.");
         handleSignIn();
+        return;
       }
 
       if (errorMessage.includes("tasks.googleapis.com") || errorMessage.includes("API has not been used")) {
@@ -779,11 +788,6 @@ export default function App() {
 
       setDiagnosticStatus(prev => ({ ...prev, tasks: 'stable' }));
       alert(`Erro no Google Tasks: ${errorMessage}`);
-      if (errorMessage.toLowerCase().includes("token") || 
-          errorMessage.toLowerCase().includes("auth") || 
-          errorMessage.toLowerCase().includes("credentials")) {
-        handleSignIn();
-      }
     } finally {
       setIsSyncingTasks(false);
     }
@@ -836,6 +840,9 @@ export default function App() {
           const courseworkData = await courseworkRes.json();
 
           if (!courseworkRes.ok) {
+            if (courseworkData.error?.includes("invalid authentication credentials") || courseworkData.error?.includes("Expected OAuth 2 access token")) {
+              throw new Error(courseworkData.error);
+            }
             console.warn(`Failed to fetch coursework for course ${course.id}:`, courseworkData.error);
             continue;
           }
@@ -891,7 +898,11 @@ export default function App() {
                   body: JSON.stringify({ accessToken, courseId: course.id, courseWorkId: work.id, role })
                 });
                 const subData = await subRes.json();
-                if (subRes.ok && Array.isArray(subData)) {
+                if (!subRes.ok) {
+                  if (subData.error?.includes("invalid authentication credentials") || subData.error?.includes("Expected OAuth 2 access token")) {
+                    throw new Error(subData.error);
+                  }
+                } else if (Array.isArray(subData)) {
                   if (role === 'student' && subData.length > 0) {
                     submissionStatus = subData[0].state || null;
                     assignedGrade = subData[0].assignedGrade !== undefined ? subData[0].assignedGrade : null;
@@ -900,7 +911,10 @@ export default function App() {
                     submissionCount = { turnedIn, total: subData.length };
                   }
                 }
-              } catch (e) {
+              } catch (e: any) {
+                if (e.message?.includes("invalid authentication credentials") || e.message?.includes("Expected OAuth 2 access token")) {
+                  throw e;
+                }
                 console.warn(`Failed to fetch submissions for coursework ${work.id}:`, e);
               }
 
@@ -963,6 +977,9 @@ export default function App() {
             }
           }
         } catch (courseError: any) {
+          if (courseError.message?.includes("invalid authentication credentials") || courseError.message?.includes("Expected OAuth 2 access token")) {
+            throw courseError;
+          }
           console.error(`Error processing course ${course.id}:`, courseError);
         }
       }
@@ -978,6 +995,14 @@ export default function App() {
       console.error("Sync Error:", e);
       
       let errorMessage = e.message || "Tente entrar novamente.";
+      
+      if (errorMessage.includes("invalid authentication credentials") || errorMessage.includes("Expected OAuth 2 access token")) {
+        setAccessToken(null);
+        sessionStorage.removeItem('google_access_token');
+        alert("Sua sessão do Google expirou. Por favor, faça login novamente.");
+        handleSignIn();
+        return;
+      }
       
       // Check for disabled API error
       if (errorMessage.includes("classroom.googleapis.com") || errorMessage.includes("API has not been used")) {
