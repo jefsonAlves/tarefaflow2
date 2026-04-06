@@ -188,10 +188,14 @@ export default function App() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [isSyncingTasks, setIsSyncingTasks] = useState(false);
   const [isSyncingCalendar, setIsSyncingCalendar] = useState(false);
-  const [activeTab, setActiveTab] = useState<string>('tasks');
+  const [activeTab, setActiveTab] = useState<string>(() => localStorage.getItem('active_tab') || 'tasks');
   const [roleFilter, setRoleFilter] = useState<'all' | 'student' | 'teacher'>('all');
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [showDiagnostics, setShowDiagnostics] = useState(false);
+
+  useEffect(() => {
+    localStorage.setItem('active_tab', activeTab);
+  }, [activeTab]);
   const [diagnosticStatus, setDiagnosticStatus] = useState({
     notifications: 'checking',
     battery: 'checking',
@@ -266,7 +270,7 @@ export default function App() {
               email: u.email || '',
               displayName: u.displayName || '',
               photoURL: u.photoURL || '',
-              role_user: u.email === 'Jefson.ti@gmail.com' ? 'admin' : 'user',
+              role_user: u.email === 'jefson.s.a7@gmail.com' ? 'admin' : 'user',
               subscriptionStatus: 'trialing',
               trialStartAt: new Date().toISOString(),
               trialEndsAt: new Date(Date.now() + 25 * 24 * 60 * 60 * 1000).toISOString(),
@@ -1476,7 +1480,11 @@ export default function App() {
           </motion.div>
         </AnimatePresence>
       </main>
-      <BottomNavigation activeTab={activeTab} setActiveTab={setActiveTab} />
+      <BottomNavigation 
+        activeTab={activeTab} 
+        setActiveTab={setActiveTab} 
+        isAdmin={userProfile?.role_user === 'admin'} 
+      />
       </div>
 
       {/* Onboarding Tour Overlay */}
