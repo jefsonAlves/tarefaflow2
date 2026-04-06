@@ -470,7 +470,13 @@ export default function App() {
       const matchesSearch = t.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
                            t.category.toLowerCase().includes(searchQuery.toLowerCase());
       const matchesSource = sourceFilter === 'all' || t.source === sourceFilter;
-      const matchesRole = roleFilter === 'all' || t.role === roleFilter;
+      
+      // Refined Role Filtering
+      const matchesRole = roleFilter === 'all' || 
+                          (roleFilter === 'teacher' 
+                            ? (t.role === 'teacher' || t.courseId !== undefined) 
+                            : t.role === 'student');
+      
       const matchesStatus = statusFilter === 'all' || t.status === statusFilter;
       const matchesPriority = priorityFilter === 'all' || t.priority === priorityFilter;
       return matchesSearch && matchesSource && matchesRole && matchesStatus && matchesPriority;
@@ -1300,7 +1306,13 @@ export default function App() {
           >
             {activeTab === 'tasks' ? (
               <DragDropContext onDragEnd={handleDragEnd}>
-                <EnvironmentSwitcher role={userRole} setRole={setUserRole} />
+                <EnvironmentSwitcher 
+                  role={userRole} 
+                  setRole={(newRole) => {
+                    setUserRole(newRole);
+                    setRoleFilter(newRole);
+                  }} 
+                />
                 <TaskDashboardSummary tasks={filteredTasks} />
                 {renderTaskGroup(filteredTasks, 'main')}
               </DragDropContext>
