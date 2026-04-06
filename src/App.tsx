@@ -326,8 +326,14 @@ export default function App() {
           Notification.requestPermission();
         }
       }
-    } catch (e) {
-      console.error("Sign-in error:", e);
+    } catch (e: any) {
+      console.error("Sign-in error details:", {
+        code: e.code,
+        message: e.message,
+        customData: e.customData,
+        name: e.name
+      });
+      alert(`Erro ao fazer login: ${e.message || 'Erro desconhecido'}`);
     }
   };
 
