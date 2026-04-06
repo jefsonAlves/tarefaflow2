@@ -141,6 +141,7 @@ import { TaskDashboardSummary } from './components/TaskDashboardSummary';
 import { SettingsView } from './components/SettingsView';
 import { BottomNavigation } from './components/BottomNavigation';
 import { EnvironmentSwitcher } from './components/EnvironmentSwitcher';
+import { AdminPanel } from './components/AdminPanel';
 import { CheckSquare, BookOpen, StickyNote, X } from 'lucide-react';
 
 export default function App() {
@@ -303,6 +304,7 @@ export default function App() {
     }
   }, [userProfile]);
 
+  useEffect(() => {
     const checkProactiveNotifications = () => {
       const now = new Date();
       const notifiedTasks = JSON.parse(localStorage.getItem(`notified_tasks_${user.uid}`) || '{}');
