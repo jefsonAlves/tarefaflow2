@@ -1,0 +1,45 @@
+{
+  "sidebar": {
+    "tasks": "Tarefas",
+    "reminders": "Lembretes",
+    "notes": "Anotações",
+    "subjects": "Disciplinas",
+    "admin": "Painel Admin",
+    "logout": "Sair"
+  },
+  "tasks": {
+    "todo": "A Fazer",
+    "inProgress": "Em Andamento",
+    "done": "Concluído",
+    "addTask": "Adicionar Tarefa",
+    "noTasks": "Nenhuma tarefa encontrada."
+  },
+  "subjects": {
+    "addSubject": "Adicionar Disciplina",
+    "noSubjects": "Nenhuma disciplina cadastrada ainda."
+  },
+  "payment": {
+    "trialBanner": "Seu teste termina em {{days}} dias. Assine para manter os recursos premium.",
+    "trialExpired": "Seu teste expirou. Por favor, assine para continuar usando os recursos premium.",
+    "subscribeNow": "Assinar Agora",
+    "iAlreadyPaid": "Já paguei",
+    "pixKey": "Chave PIX",
+    "copy": "Copiar",
+    "copied": "Copiado!"
+  },
+  "admin": {
+    "users": "Usuários",
+    "payments": "Solicitações de Pagamento",
+    "approve": "Aprovar",
+    "reject": "Rejeitar",
+    "release": "Liberar Acesso",
+    "pause": "Pausar Acesso"
+  },
+  "common": {
+    "save": "Salvar",
+    "cancel": "Cancelar",
+    "delete": "Excluir",
+    "edit": "Editar",
+    "move": "Mover"
+  }
+}

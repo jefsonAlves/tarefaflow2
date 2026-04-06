@@ -73,6 +73,17 @@ export interface UserProfile {
   profileType?: StudentProfileType;
   quietHoursStart?: string; // e.g., "22:00"
   quietHoursEnd?: string;   // e.g., "07:00"
+  role_user?: 'admin' | 'user';
+  subscriptionStatus?: 'trialing' | 'active' | 'paused' | 'expired' | 'pending_approval';
+  trialStartAt?: string;
+  trialEndsAt?: string;
+  billingCycle?: 'monthly' | 'yearly';
+  monthlyPrice?: number;
+  yearlyPrice?: number;
+  pixKey?: string;
+  isReleased?: boolean;
+  paymentPending?: boolean;
+  paymentApprovedAt?: string | null;
 }
 
 export interface Note {

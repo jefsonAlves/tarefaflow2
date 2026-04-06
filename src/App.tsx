@@ -136,6 +136,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
 import { Task, TaskStatus, ReminderConfig, StudentProfileType, AcademicTerm, Subject, UserProfile, Note } from './types';
 
 import { Sidebar } from './components/Sidebar';
+import { TaskActionMenu } from './components/TaskActionMenu';
 import { CheckSquare, BookOpen, StickyNote, X } from 'lucide-react';
 
 export default function App() {
@@ -361,14 +362,20 @@ export default function App() {
 
     const unsubSubjects = onSnapshot(subjectsQ, (snapshot) => {
       setSubjects(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Subject)));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, 'subjects');
     });
 
     const unsubTerms = onSnapshot(termsQ, (snapshot) => {
       setTerms(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AcademicTerm)));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, 'terms');
     });
 
     const unsubNotes = onSnapshot(notesQ, (snapshot) => {
       setNotes(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Note)));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, 'notes');
     });
 
     return () => {
@@ -424,6 +431,29 @@ export default function App() {
     }
   };
 
+  const handleMoveTask = async (id: string, newStatus: Task['status']) => {
+    const task = tasks.find(t => t.id === id);
+    if (!task) return;
+    
+    const newCompleted = newStatus === 'done';
+    const updatedTask: Task = { ...task, status: newStatus, completed: newCompleted };
+    
+    setTasks(prev => prev.map(t => t.id === id ? updatedTask : t));
+    
+    try {
+      await updateDoc(doc(db, 'tasks', id), { 
+        status: newStatus,
+        completed: newCompleted,
+        updatedAt: Timestamp.now()
+      });
+      if (accessToken) {
+        syncGoogleCalendar(updatedTask);
+      }
+    } catch (e) {
+      handleFirestoreError(e, OperationType.UPDATE, `tasks/${id}`);
+    }
+  };
+
   const filteredTasks = useMemo(() => {
     return tasks.filter(t => {
       const matchesSearch = t.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -473,7 +503,7 @@ export default function App() {
                           opacity: snapshot.isDragging ? 0.8 : 1,
                         }}
                       >
-                        <TaskCard task={task} onToggle={() => toggleTask(task)} onDelete={() => deleteTask(task)} />
+                        <TaskCard task={task} subjects={subjects} onToggle={() => toggleTask(task)} onDelete={() => deleteTask(task)} onMove={handleMoveTask} />
                       </div>
                     )}
                   </DraggableComponent>
@@ -1293,7 +1323,7 @@ export default function App() {
                                         opacity: snapshot.isDragging ? 0.8 : 1,
                                       }}
                                     >
-                                      <TaskCard task={task} onToggle={() => toggleTask(task)} onDelete={() => deleteTask(task)} />
+                                      <TaskCard task={task} subjects={subjects} onToggle={() => toggleTask(task)} onDelete={() => deleteTask(task)} onMove={handleMoveTask} />
                                     </div>
                                   )}
                                 </DraggableComponent>
@@ -1415,6 +1445,10 @@ export default function App() {
             setCategories={setCustomCategories}
             initialRole={roleFilter === 'all' ? 'student' : roleFilter}
             subjects={subjects}
+            onAddSubject={() => {
+              setShowCreateModal(false);
+              setShowSubjectModal(true);
+            }}
             onTaskCreated={(task) => {
               if (accessToken) syncGoogleCalendar(task);
             }}
@@ -1861,7 +1895,7 @@ function DiagnosticsPanel({ status, onClose, onReauth }: { status: any, onClose:
   );
 }
 
-function TaskCard({ task, onToggle, onDelete }: { task: Task, onToggle: () => void | Promise<void>, onDelete: () => void | Promise<void>, key?: any }) {
+function TaskCard({ task, subjects, onToggle, onDelete, onMove }: { task: Task, subjects: Subject[], onToggle: () => void | Promise<void>, onDelete: () => void | Promise<void>, onMove?: (id: string, newStatus: Task['status']) => void, key?: any }) {
   const getStatusInfo = () => {
     if (task.source !== 'classroom') return null;
     
@@ -1882,6 +1916,8 @@ function TaskCard({ task, onToggle, onDelete }: { task: Task, onToggle: () => vo
     const hours = diff / (1000 * 60 * 60);
     return hours > 0 && hours <= 24;
   }, [task.dueDate, task.completed]);
+
+  const subjectName = task.subjectId ? subjects.find(s => s.id === task.subjectId)?.name : task.category;
 
   return (
     <motion.div 
@@ -1913,7 +1949,7 @@ function TaskCard({ task, onToggle, onDelete }: { task: Task, onToggle: () => vo
         <div className="flex items-center flex-wrap gap-2">
           {/* 1st: Subject (Category) */}
           <span className="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full font-medium truncate max-w-[120px]">
-            {task.category}
+            {subjectName || 'Sem disciplina'}
           </span>
 
           {/* 2nd: Activity of the subject (Task Title) */}
@@ -2009,15 +2045,19 @@ function TaskCard({ task, onToggle, onDelete }: { task: Task, onToggle: () => vo
       </div>
 
       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-        <button onClick={onDelete} className="p-2 hover:bg-red-50 text-slate-400 hover:text-red-500 rounded-xl transition-colors">
-          <MoreVertical className="w-5 h-5" />
-        </button>
+        {onMove ? (
+          <TaskActionMenu task={task} onDelete={() => onDelete()} onMove={onMove} />
+        ) : (
+          <button onClick={onDelete} className="p-2 hover:bg-red-50 text-slate-400 hover:text-red-500 rounded-xl transition-colors">
+            <MoreVertical className="w-5 h-5" />
+          </button>
+        )}
       </div>
     </motion.div>
   );
 }
 
-function CreateTaskModal({ onClose, userId, categories, setCategories, onTaskCreated, initialRole, subjects }: { onClose: () => void, userId: string, categories: string[], setCategories: (cats: string[]) => void, onTaskCreated?: (task: Task) => void, initialRole?: 'student' | 'teacher', subjects: Subject[] }) {
+function CreateTaskModal({ onClose, userId, categories, setCategories, onTaskCreated, initialRole, subjects, onAddSubject }: { onClose: () => void, userId: string, categories: string[], setCategories: (cats: string[]) => void, onTaskCreated?: (task: Task) => void, initialRole?: 'student' | 'teacher', subjects: Subject[], onAddSubject: () => void }) {
   const [title, setTitle] = useState('');
   const [date, setDate] = useState('');
   const [priority, setPriority] = useState<'low' | 'medium' | 'high'>('medium');
@@ -2163,16 +2203,29 @@ function CreateTaskModal({ onClose, userId, categories, setCategories, onTaskCre
             </div>
             <div className="space-y-2">
               <label className="text-sm font-semibold text-slate-700">Disciplina</label>
-              <select 
-                value={subjectId}
-                onChange={(e) => setSubjectId(e.target.value)}
-                className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl p-4 focus:border-blue-500 transition-all outline-none appearance-none"
-              >
-                <option value="">Nenhuma</option>
-                {subjects.map(s => (
-                  <option key={s.id} value={s.id}>{s.name}</option>
-                ))}
-              </select>
+              {subjects.length > 0 ? (
+                <select 
+                  value={subjectId}
+                  onChange={(e) => setSubjectId(e.target.value)}
+                  className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl p-4 focus:border-blue-500 transition-all outline-none appearance-none"
+                >
+                  <option value="">Nenhuma</option>
+                  {subjects.map(s => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))}
+                </select>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  <p className="text-xs text-slate-500">Nenhuma disciplina cadastrada.</p>
+                  <button
+                    type="button"
+                    onClick={onAddSubject}
+                    className="text-xs font-bold text-blue-600 hover:text-blue-700 bg-blue-50 py-2 px-3 rounded-xl transition-colors"
+                  >
+                    + Criar Disciplina
+                  </button>
+                </div>
+              )}
             </div>
             <div className="space-y-2">
               <label className="text-sm font-semibold text-slate-700">Papel</label>

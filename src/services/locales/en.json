@@ -1,0 +1,45 @@
+{
+  "sidebar": {
+    "tasks": "Tasks",
+    "reminders": "Reminders",
+    "notes": "Notes",
+    "subjects": "Subjects",
+    "admin": "Admin Panel",
+    "logout": "Logout"
+  },
+  "tasks": {
+    "todo": "To Do",
+    "inProgress": "In Progress",
+    "done": "Done",
+    "addTask": "Add Task",
+    "noTasks": "No tasks found."
+  },
+  "subjects": {
+    "addSubject": "Add Subject",
+    "noSubjects": "No subjects registered yet."
+  },
+  "payment": {
+    "trialBanner": "Your trial ends in {{days}} days. Subscribe to keep premium features.",
+    "trialExpired": "Your trial has expired. Please subscribe to continue using premium features.",
+    "subscribeNow": "Subscribe Now",
+    "iAlreadyPaid": "I already paid",
+    "pixKey": "PIX Key",
+    "copy": "Copy",
+    "copied": "Copied!"
+  },
+  "admin": {
+    "users": "Users",
+    "payments": "Payment Requests",
+    "approve": "Approve",
+    "reject": "Reject",
+    "release": "Release Access",
+    "pause": "Pause Access"
+  },
+  "common": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "edit": "Edit",
+    "move": "Move"
+  }
+}
