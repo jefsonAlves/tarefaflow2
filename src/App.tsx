@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { useState, useEffect, useMemo, Component } from 'react';
-import { auth, signIn, db } from './firebase';
+import { auth, signIn, handleRedirectResult, db } from './firebase';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { collection, query, where, onSnapshot, orderBy, addDoc, updateDoc, doc, deleteDoc, Timestamp } from 'firebase/firestore';
 import { motion, AnimatePresence } from 'motion/react';
@@ -234,10 +234,26 @@ export default function App() {
       setUser(u);
       setLoading(false);
     });
+    
+    // Check for redirect result
+    handleRedirectResult().then((result) => {
+      if (result && result.accessToken) {
+        setAccessToken(result.accessToken);
+        sessionStorage.setItem('google_access_token', result.accessToken);
+        if ('Notification' in window && Notification.permission === 'default') {
+          Notification.requestPermission();
+        }
+      }
+    }).catch((e: any) => {
+      console.error("Redirect sign-in error details:", e);
+      alert(`Erro ao fazer login: ${e.message || 'Erro desconhecido'}`);
+    });
+
     return unsubscribe;
   }, []);
 
   // Proactive Notifications and Advanced Reminders
+
   useEffect(() => {
     if (!user || tasks.length === 0 || !('Notification' in window) || Notification.permission !== 'granted') return;
 
@@ -323,14 +339,7 @@ export default function App() {
 
   const handleSignIn = async () => {
     try {
-      const { accessToken: token } = await signIn();
-      if (token) {
-        setAccessToken(token);
-        sessionStorage.setItem('google_access_token', token);
-        if ('Notification' in window && Notification.permission === 'default') {
-          Notification.requestPermission();
-        }
-      }
+      await signIn();
     } catch (e: any) {
       console.error("Sign-in error details:", {
         code: e.code,
@@ -338,7 +347,7 @@ export default function App() {
         customData: e.customData,
         name: e.name
       });
-      alert(`Erro ao fazer login: ${e.message || 'Erro desconhecido'}`);
+      alert(`Erro ao iniciar login: ${e.message || 'Erro desconhecido'}`);
     }
   };
 
@@ -1972,6 +1981,16 @@ function TaskCard({ task, subjects, onToggle, onDelete, onMove }: { task: Task, 
           <span className="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full font-medium truncate max-w-[120px]">
             {subjectName || 'Sem disciplina'}
           </span>
+
+          {/* Role Indicator */}
+          {task.role && (
+            <span className={cn(
+              "text-[10px] px-2 py-0.5 rounded-full font-bold uppercase",
+              task.role === 'teacher' ? "bg-purple-100 text-purple-700" : "bg-blue-100 text-blue-700"
+            )}>
+              {task.role === 'teacher' ? 'Professor' : 'Aluno'}
+            </span>
+          )}
 
           {/* 2nd: Activity of the subject (Task Title) */}
           <h3 className={cn("font-semibold truncate max-w-[200px]", task.completed && "line-through text-slate-400")}>
