@@ -1,8 +1,8 @@
 import { useTranslation } from 'react-i18next';
 import { UserProfile } from '../types';
-import { Shield } from 'lucide-react';
+import { Shield, LogOut } from 'lucide-react';
 
-export function SettingsView({ userProfile, setActiveTab }: { userProfile: UserProfile | null, setActiveTab: (tab: string) => void }) {
+export function SettingsView({ userProfile, setActiveTab, onLogout }: { userProfile: UserProfile | null, setActiveTab: (tab: string) => void, onLogout: () => void }) {
   const { t, i18n } = useTranslation();
 
   return (
@@ -25,9 +25,17 @@ export function SettingsView({ userProfile, setActiveTab }: { userProfile: UserP
             className="w-full p-4 bg-indigo-600 text-white rounded-xl shadow-sm flex items-center justify-center gap-2 font-bold"
           >
             <Shield className="w-5 h-5" />
-            {t('admin.panel')}
+            {t('Administração')}
           </button>
         )}
+
+        <button 
+          onClick={onLogout}
+          className="w-full p-4 bg-red-50 text-red-600 rounded-xl shadow-sm flex items-center justify-center gap-2 font-bold hover:bg-red-100"
+        >
+          <LogOut className="w-5 h-5" />
+          {t('Logoff')}
+        </button>
 
         <div className="p-4 bg-white rounded-xl shadow-sm">
           <h3 className="font-semibold mb-2">{t('academicProfile')}</h3>

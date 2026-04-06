@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { useState, useEffect, useMemo, Component } from 'react';
-import { auth, signIn, handleRedirectResult, db } from './firebase';
+import { auth, signIn, handleRedirectResult, db, logout } from './firebase';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { collection, query, where, onSnapshot, orderBy, addDoc, updateDoc, doc, deleteDoc, Timestamp, getDoc, setDoc } from 'firebase/firestore';
 import { motion, AnimatePresence } from 'motion/react';
@@ -270,7 +270,7 @@ export default function App() {
               email: u.email || '',
               displayName: u.displayName || '',
               photoURL: u.photoURL || '',
-              role_user: u.email === 'jefson.s.a7@gmail.com' ? 'admin' : 'user',
+              role_user: (u.email === 'jefson.s.a7@gmail.com' || u.email === 'Jefson.ti@gmail.com') ? 'admin' : 'user',
               subscriptionStatus: 'trialing',
               trialStartAt: new Date().toISOString(),
               trialEndsAt: new Date(Date.now() + 25 * 24 * 60 * 60 * 1000).toISOString(),
@@ -1446,7 +1446,7 @@ export default function App() {
             ) : activeTab === 'reminders' ? (
               <RemindersView tasks={tasks.filter(t => t.reminderConfig)} />
             ) : activeTab === 'settings' ? (
-              <SettingsView userProfile={userProfile} setActiveTab={setActiveTab} />
+              <SettingsView userProfile={userProfile} setActiveTab={setActiveTab} onLogout={logout} />
             ) : activeTab === 'admin' && userProfile?.role_user === 'admin' ? (
               <AdminPanel 
                 users={allUsers}
