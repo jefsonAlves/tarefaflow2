@@ -164,6 +164,7 @@ export default function App() {
   };
 
   const triggerNotification = (title: string, options: NotificationOptions) => {
+    if ('Notification' in window && Notification.permission === 'granted') {
       try {
         new Notification(title, options);
       } catch (e) {
@@ -198,6 +199,12 @@ export default function App() {
   const [roleFilter, setRoleFilter] = useState<'all' | 'student' | 'teacher'>('all');
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [showDiagnostics, setShowDiagnostics] = useState(false);
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [authErrorMessage, setAuthErrorMessage] = useState('');
+
+  // Admin State
+  const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
+  const [paymentRequests, setPaymentRequests] = useState<any[]>([]);
 
   useEffect(() => {
     localStorage.setItem('active_tab', activeTab);
@@ -883,7 +890,8 @@ export default function App() {
             msg.toLowerCase().includes("credentials")) {
           setAccessToken(null);
           sessionStorage.removeItem('google_access_token');
-          handleSignIn();
+          setAuthErrorMessage("Sua sessão do Google Calendar expirou. Por favor, reconecte sua conta.");
+          setShowAuthModal(true);
         }
         return;
       }
@@ -905,7 +913,10 @@ export default function App() {
 
   const syncGoogleTasks = async () => {
     if (!user || !accessToken) {
-      if (!accessToken) handleSignIn();
+      if (!accessToken) {
+        setAuthErrorMessage("Para sincronizar com o Google Tasks, você precisa conectar sua conta Google.");
+        setShowAuthModal(true);
+      }
       return;
     }
     setIsSyncingTasks(true);
@@ -1001,7 +1012,8 @@ export default function App() {
         setAccessToken(null);
         sessionStorage.removeItem('google_access_token');
         // alert("Sua sessão do Google expirou. Por favor, faça login novamente.");
-        handleSignIn();
+        setAuthErrorMessage("Sua sessão do Google Tasks expirou. Por favor, reconecte sua conta.");
+        setShowAuthModal(true);
         return;
       }
 
@@ -1023,7 +1035,10 @@ export default function App() {
   };
   const syncClassroom = async () => {
     if (!user || !accessToken) {
-      if (!accessToken) handleSignIn();
+      if (!accessToken) {
+        setAuthErrorMessage("Para sincronizar com o Google Classroom, você precisa conectar sua conta Google.");
+        setShowAuthModal(true);
+      }
       return;
     }
 
@@ -1225,8 +1240,8 @@ export default function App() {
       if (errorMessage.includes("invalid authentication credentials") || errorMessage.includes("Expected OAuth 2 access token")) {
         setAccessToken(null);
         sessionStorage.removeItem('google_access_token');
-        alert("Sua sessão do Google expirou. Por favor, faça login novamente.");
-        handleSignIn();
+        setAuthErrorMessage("Sua sessão do Google expirou. Por favor, reconecte sua conta para sincronizar.");
+        setShowAuthModal(true);
         return;
       }
       
@@ -1248,7 +1263,8 @@ export default function App() {
           errorMessage.toLowerCase().includes("credentials")) {
         setAccessToken(null);
         sessionStorage.removeItem('google_access_token');
-        handleSignIn(); 
+        setAuthErrorMessage("Sua sessão do Google expirou ou as permissões são insuficientes. Por favor, reconecte sua conta.");
+        setShowAuthModal(true);
       }
     } finally {
       setIsSyncing(false);
@@ -1566,6 +1582,45 @@ export default function App() {
             onClose={() => setShowDiagnostics(false)} 
             onReauth={handleSignIn}
           />
+        )}
+      </AnimatePresence>
+
+      {/* Auth Error Modal */}
+      <AnimatePresence>
+        {showAuthModal && (
+          <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md">
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl"
+            >
+              <div className="w-16 h-16 bg-amber-100 rounded-2xl flex items-center justify-center mb-6 mx-auto">
+                <X className="w-8 h-8 text-amber-600" />
+              </div>
+              <h3 className="text-2xl font-bold text-slate-900 text-center mb-4">Conexão Necessária</h3>
+              <p className="text-slate-600 text-center mb-8 leading-relaxed">
+                {authErrorMessage}
+              </p>
+              <div className="flex flex-col gap-3">
+                <button 
+                  onClick={() => {
+                    setShowAuthModal(false);
+                    handleSignIn();
+                  }}
+                  className="w-full py-4 bg-blue-600 text-white rounded-2xl font-bold shadow-lg shadow-blue-200 hover:bg-blue-700 transition-all"
+                >
+                  Conectar Conta Google
+                </button>
+                <button 
+                  onClick={() => setShowAuthModal(false)}
+                  className="w-full py-4 bg-slate-100 text-slate-600 rounded-2xl font-bold hover:bg-slate-200 transition-all"
+                >
+                  Cancelar
+                </button>
+              </div>
+            </motion.div>
+          </div>
         )}
       </AnimatePresence>
 
