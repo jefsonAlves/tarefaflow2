@@ -1,0 +1,72 @@
+export type TaskStatus = 'todo' | 'in-progress' | 'done' | 'archived' | 'pending' | 'completed';
+
+export interface ReminderConfig {
+  type: 'once' | 'repeated' | 'nagging' | 'progressive';
+  intervalMinutes: number;
+  nextReminder: string;
+  progressiveStepMinutes?: number;
+  repeatCount?: number;
+  repeatUntilAcknowledged?: boolean;
+}
+
+export interface Task {
+  id: string;
+  title: string;
+  description: string;
+  dueDate: string;
+  hasDueDate?: boolean;
+  completed: boolean; // Derived from status === 'done'
+  status: TaskStatus;
+  priority: 'low' | 'medium' | 'high';
+  category: string;
+  source: 'local' | 'classroom' | 'tasks';
+  externalId?: string;
+  courseId?: string;
+  role?: 'student' | 'teacher';
+  submissionStatus?: 'TURNED_IN' | 'RETURNED' | 'NEW' | 'RECLAIMED_BY_STUDENT';
+  submissionCount?: { turnedIn: number, total: number };
+  maxPoints?: number;
+  assignedGrade?: number;
+  alternateLink?: string;
+  reminderConfig?: ReminderConfig;
+  userId: string;
+  createdAt: any;
+  updatedAt?: any;
+  lastSyncAt?: string;
+  updateTime?: string;
+  syncError?: string;
+  calendarEventId?: string;
+  order?: number;
+  
+  // Academic & Local Customization
+  subjectId?: string;
+  termId?: string;
+  localNote?: string;
+}
+
+export type StudentProfileType = 'school' | 'university';
+
+export interface AcademicTerm {
+  id: string;
+  name: string;
+  isActive: boolean;
+  startDate?: string;
+  endDate?: string;
+}
+
+export interface Subject {
+  id: string;
+  name: string;
+  color: string;
+  termIds: string[];
+}
+
+export interface UserProfile {
+  uid: string;
+  email: string;
+  displayName: string;
+  photoURL: string;
+  profileType?: StudentProfileType;
+  quietHoursStart?: string; // e.g., "22:00"
+  quietHoursEnd?: string;   // e.g., "07:00"
+}

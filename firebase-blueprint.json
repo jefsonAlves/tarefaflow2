@@ -1,0 +1,61 @@
+{
+  "entities": {
+    "Task": {
+      "title": "Task",
+      "description": "A user task or reminder",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "dueDate": { "type": "string", "format": "date-time" },
+        "completed": { "type": "boolean" },
+        "priority": { "type": "string", "enum": ["low", "medium", "high"] },
+        "category": { "type": "string" },
+        "reminderConfig": {
+          "type": "object",
+          "properties": {
+            "type": { "type": "string", "enum": ["once", "repeated", "nagging"] },
+            "intervalMinutes": { "type": "number" },
+            "maxRepeats": { "type": "number" },
+            "nextReminder": { "type": "string", "format": "date-time" }
+          }
+        },
+        "source": { "type": "string", "enum": ["local", "classroom", "tasks"] },
+        "externalId": { "type": "string" },
+        "lastSync": { "type": "string", "format": "date-time" },
+        "userId": { "type": "string" }
+      },
+      "required": ["title", "userId", "completed"]
+    },
+    "UserConfig": {
+      "title": "User Configuration",
+      "description": "User preferences and sync status",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "theme": { "type": "string", "enum": ["light", "dark", "system"] },
+        "syncEnabled": { "type": "boolean" },
+        "classroomEnabled": { "type": "boolean" },
+        "diagnostics": {
+          "type": "object",
+          "properties": {
+            "lastCheck": { "type": "string", "format": "date-time" },
+            "notificationsEnabled": { "type": "boolean" },
+            "batteryOptimized": { "type": "boolean" }
+          }
+        }
+      }
+    }
+  },
+  "firestore": {
+    "tasks": {
+      "schema": "Task",
+      "description": "User tasks collection"
+    },
+    "users": {
+      "schema": "UserConfig",
+      "description": "User settings and metadata"
+    }
+  }
+}

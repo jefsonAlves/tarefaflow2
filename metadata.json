@@ -1,0 +1,5 @@
+{
+  "name": "SmartPlan Pro",
+  "description": "Advanced task organizer with Google Classroom/Tasks integration, reliable reminders, and secure synchronization.",
+  "requestFramePermissions": ["notifications", "geolocation"]
+}
