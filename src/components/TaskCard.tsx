@@ -195,7 +195,7 @@ export function TaskCard({ task, onToggle, onDelete, onUpdateStatus, onEdit, onC
                   onClick={() => { onUpdateStatus('done'); setShowMenu(false); }}
                   className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
                 >
-                  Finalizar
+                  Entregar
                 </button>
               )}
               {onConfigureReminder && (

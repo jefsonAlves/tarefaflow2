@@ -2,7 +2,7 @@ import * as React from 'react';
 import { useState, useEffect, useMemo, Component } from 'react';
 import { auth, signIn, handleRedirectResult, db } from './firebase';
 import { onAuthStateChanged, User } from 'firebase/auth';
-import { collection, query, where, onSnapshot, orderBy, addDoc, updateDoc, doc, deleteDoc, Timestamp } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, orderBy, addDoc, updateDoc, doc, deleteDoc, Timestamp, getDoc, setDoc } from 'firebase/firestore';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Plus, 
@@ -145,10 +145,15 @@ import { CheckSquare, BookOpen, StickyNote, X } from 'lucide-react';
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [accessToken, setAccessToken] = useState<string | null>(sessionStorage.getItem('google_access_token'));
   const [loading, setLoading] = useState(true);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [userRole, setUserRole] = useState<'student' | 'teacher'>('student');
+  
+  // Admin State
+  const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
+  const [paymentRequests, setPaymentRequests] = useState<any[]>([]);
   
   // Academic Structure State
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -230,8 +235,38 @@ export default function App() {
   }, [user]);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (u) => {
+    const unsubscribe = onAuthStateChanged(auth, async (u) => {
       setUser(u);
+      
+      if (u) {
+        try {
+          const userDocRef = doc(db, 'users', u.uid);
+          const userDocSnap = await getDoc(userDocRef);
+          
+          if (!userDocSnap.exists()) {
+            const newProfile: UserProfile = {
+              uid: u.uid,
+              email: u.email || '',
+              displayName: u.displayName || '',
+              photoURL: u.photoURL || '',
+              role_user: u.email === 'Jefson.ti@gmail.com' ? 'admin' : 'user',
+              subscriptionStatus: 'trialing',
+              trialStartAt: new Date().toISOString(),
+              trialEndsAt: new Date(Date.now() + 25 * 24 * 60 * 60 * 1000).toISOString(),
+              billingCycle: 'monthly'
+            };
+            await setDoc(userDocRef, newProfile);
+            setUserProfile(newProfile);
+          } else {
+            setUserProfile(userDocSnap.data() as UserProfile);
+          }
+        } catch (error) {
+          console.error("Error fetching/creating user profile:", error);
+        }
+      } else {
+        setUserProfile(null);
+      }
+      
       setLoading(false);
     });
     
@@ -252,10 +287,21 @@ export default function App() {
     return unsubscribe;
   }, []);
 
-  // Proactive Notifications and Advanced Reminders
-
+  // Admin Data Fetching
   useEffect(() => {
-    if (!user || tasks.length === 0 || !('Notification' in window) || Notification.permission !== 'granted') return;
+    if (userProfile?.role_user === 'admin') {
+      const unsubUsers = onSnapshot(collection(db, 'users'), (snapshot) => {
+        setAllUsers(snapshot.docs.map(d => d.data() as UserProfile));
+      });
+      const unsubPayments = onSnapshot(collection(db, 'payment_requests'), (snapshot) => {
+        setPaymentRequests(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+      });
+      return () => {
+        unsubUsers();
+        unsubPayments();
+      };
+    }
+  }, [userProfile]);
 
     const checkProactiveNotifications = () => {
       const now = new Date();
@@ -1377,7 +1423,34 @@ export default function App() {
             ) : activeTab === 'reminders' ? (
               <RemindersView tasks={tasks.filter(t => t.reminderConfig)} />
             ) : activeTab === 'settings' ? (
-              <SettingsView />
+              <SettingsView userProfile={userProfile} setActiveTab={setActiveTab} />
+            ) : activeTab === 'admin' && userProfile?.role_user === 'admin' ? (
+              <AdminPanel 
+                users={allUsers}
+                paymentRequests={paymentRequests}
+                onApprovePayment={async (requestId, userId) => {
+                  try {
+                    await updateDoc(doc(db, 'payment_requests', requestId), { status: 'approved' });
+                    await updateDoc(doc(db, 'users', userId), { subscriptionStatus: 'active' });
+                  } catch (e) { console.error(e); }
+                }}
+                onRejectPayment={async (requestId, userId) => {
+                  try {
+                    await updateDoc(doc(db, 'payment_requests', requestId), { status: 'rejected' });
+                    await updateDoc(doc(db, 'users', userId), { subscriptionStatus: 'blocked' });
+                  } catch (e) { console.error(e); }
+                }}
+                onReleaseAccess={async (userId) => {
+                  try {
+                    await updateDoc(doc(db, 'users', userId), { isReleased: true, subscriptionStatus: 'active' });
+                  } catch (e) { console.error(e); }
+                }}
+                onPauseAccess={async (userId) => {
+                  try {
+                    await updateDoc(doc(db, 'users', userId), { isReleased: false, subscriptionStatus: 'paused' });
+                  } catch (e) { console.error(e); }
+                }}
+              />
             ) : (
               <SubjectsView subjects={subjects} terms={terms} onAddSubject={() => setShowSubjectModal(true)} />
             )}
