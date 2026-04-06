@@ -306,6 +306,7 @@ export default function App() {
 
   useEffect(() => {
     const checkProactiveNotifications = () => {
+      if (!user) return;
       const now = new Date();
       const notifiedTasks = JSON.parse(localStorage.getItem(`notified_tasks_${user.uid}`) || '{}');
       let updated = false;
