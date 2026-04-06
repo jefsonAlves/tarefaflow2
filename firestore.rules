@@ -83,12 +83,55 @@ service cloud.firestore {
              (!('status' in data) || data.status == null || data.status in ['pending', 'in-progress', 'completed', 'todo', 'done', 'archived']);
     }
 
+    function isValidSubject(data) {
+      return data.name is string && data.name.size() > 0 &&
+             data.color is string &&
+             data.userId is string && data.userId == request.auth.uid &&
+             data.termIds is list;
+    }
+
+    function isValidTerm(data) {
+      return data.name is string && data.name.size() > 0 &&
+             data.isActive is bool &&
+             data.userId is string && data.userId == request.auth.uid;
+    }
+
+    function isValidNote(data) {
+      return data.title is string &&
+             data.content is string &&
+             data.userId is string && data.userId == request.auth.uid;
+    }
+
     // Tasks collection
     match /tasks/{taskId} {
       allow read: if isDocOwner() || isAdmin();
       allow create: if isAuthenticated() && isValidTask(request.resource.data);
       allow update: if (isDocOwner() || isAdmin()) && isValidTask(request.resource.data);
       allow delete: if isDocOwner() || isAdmin();
+    }
+
+    // Subjects collection
+    match /subjects/{subjectId} {
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow create: if isAuthenticated() && isValidSubject(request.resource.data);
+      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid && isValidSubject(request.resource.data);
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+
+    // Terms collection
+    match /terms/{termId} {
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow create: if isAuthenticated() && isValidTerm(request.resource.data);
+      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid && isValidTerm(request.resource.data);
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+
+    // Notes collection
+    match /notes/{noteId} {
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow create: if isAuthenticated() && isValidNote(request.resource.data);
+      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid && isValidNote(request.resource.data);
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
     }
 
     // Users collection

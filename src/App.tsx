@@ -145,11 +145,13 @@ export default function App() {
   const [tasks, setTasks] = useState<Task[]>([]);
   
   // Academic Structure State
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [profileType, setProfileType] = useState<StudentProfileType>('school');
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [terms, setTerms] = useState<AcademicTerm[]>([]);
+  const [notes, setNotes] = useState<Note[]>([]);
   const [selectedSubjectId, setSelectedSubjectId] = useState<string | null>(null);
+  const [selectedTermId, setSelectedTermId] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [sourceFilter, setSourceFilter] = useState<'all' | 'local' | 'classroom' | 'tasks'>('all');
@@ -158,7 +160,7 @@ export default function App() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [isSyncingTasks, setIsSyncingTasks] = useState(false);
   const [isSyncingCalendar, setIsSyncingCalendar] = useState(false);
-  const [activeTab, setActiveTab] = useState<'tasks' | 'calendar' | 'kanban'>('tasks');
+  const [activeTab, setActiveTab] = useState<'tasks' | 'calendar' | 'kanban' | 'subjects' | 'reminders' | 'notes' | 'settings'>('tasks');
   const [roleFilter, setRoleFilter] = useState<'all' | 'student' | 'teacher'>('all');
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [showDiagnostics, setShowDiagnostics] = useState(false);
@@ -267,18 +269,19 @@ export default function App() {
               if (config.type === 'progressive') {
                 const currentCount = config.repeatCount || 0;
                 const step = config.progressiveStepMinutes || 5;
-                const currentInterval = config.intervalMinutes + (currentCount * step);
+                const intervalToAdd = config.intervalMinutes + (currentCount * step);
                 
-                // Cap max interval to 60 mins to prevent overlapping/infinite stretching
-                intervalToAdd = Math.min(currentInterval, 60); 
+                // Cap max interval to 1440 mins (24h) to prevent infinite stretching
+                const cappedInterval = Math.min(intervalToAdd, 1440); 
                 
                 await updateDoc(doc(db, 'tasks', task.id), {
-                  'reminderConfig.nextReminder': new Date(nextTime.getTime() + intervalToAdd * 60000).toISOString(),
+                  'reminderConfig.nextReminder': new Date(now.getTime() + cappedInterval * 60000).toISOString(),
                   'reminderConfig.repeatCount': currentCount + 1
                 });
               } else {
+                const intervalToAdd = config.intervalMinutes || 15;
                 await updateDoc(doc(db, 'tasks', task.id), {
-                  'reminderConfig.nextReminder': new Date(nextTime.getTime() + intervalToAdd * 60000).toISOString()
+                  'reminderConfig.nextReminder': new Date(now.getTime() + intervalToAdd * 60000).toISOString()
                 });
               }
             }
@@ -349,14 +352,53 @@ export default function App() {
     return unsubscribe;
   }, [user]);
 
+  useEffect(() => {
+    if (!user) return;
+
+    const subjectsQ = query(collection(db, 'subjects'), where('userId', '==', user.uid));
+    const termsQ = query(collection(db, 'terms'), where('userId', '==', user.uid));
+    const notesQ = query(collection(db, 'notes'), where('userId', '==', user.uid));
+
+    const unsubSubjects = onSnapshot(subjectsQ, (snapshot) => {
+      setSubjects(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Subject)));
+    });
+
+    const unsubTerms = onSnapshot(termsQ, (snapshot) => {
+      setTerms(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AcademicTerm)));
+    });
+
+    const unsubNotes = onSnapshot(notesQ, (snapshot) => {
+      setNotes(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Note)));
+    });
+
+    return () => {
+      unsubSubjects();
+      unsubTerms();
+      unsubNotes();
+    };
+  }, [user]);
+
   const toggleTask = async (task: Task) => {
     try {
-      const newCompleted = !task.completed;
-      const newStatus = newCompleted ? 'done' : 'todo';
+      let newStatus: TaskStatus = 'todo';
+      let newCompleted = false;
+
+      if (task.status === 'todo') {
+        newStatus = 'in-progress';
+        newCompleted = false;
+      } else if (task.status === 'in-progress') {
+        newStatus = 'done';
+        newCompleted = true;
+      } else {
+        newStatus = 'todo';
+        newCompleted = false;
+      }
+
       const updatedTask: Task = { ...task, completed: newCompleted, status: newStatus };
       await updateDoc(doc(db, 'tasks', task.id), {
         completed: newCompleted,
-        status: newStatus
+        status: newStatus,
+        updatedAt: Timestamp.now()
       });
       
       if (accessToken) {
@@ -453,24 +495,26 @@ export default function App() {
   };
 
   const renderTaskGroup = (groupTasks: Task[], prefix: string) => {
+    const groupInProgress = groupTasks.filter(t => t.status === 'in-progress');
     const groupOverdue = groupTasks.filter(t => {
       const d = new Date(t.dueDate);
       const now = new Date();
-      return d < now && !t.completed;
+      return d < now && t.status === 'todo';
     });
     const groupToday = groupTasks.filter(t => {
       const d = new Date(t.dueDate);
       const now = new Date();
-      return d.toDateString() === now.toDateString() && !t.completed;
+      return d.toDateString() === now.toDateString() && t.status === 'todo';
     });
     const groupUpcoming = groupTasks.filter(t => {
       const d = new Date(t.dueDate);
       const now = new Date();
-      return d > now && d.toDateString() !== now.toDateString() && !t.completed;
+      return d > now && d.toDateString() !== now.toDateString() && t.status === 'todo';
     });
 
     return (
       <div className="space-y-12">
+        {renderTaskSection(groupInProgress, "Em Progresso", <Clock className="w-5 h-5" />, "text-blue-600", `${prefix}-inprogress`)}
         {renderTaskSection(groupOverdue, "Atrasadas", <AlertCircle className="w-5 h-5" />, "text-red-600", `${prefix}-overdue`)}
         {renderTaskSection(groupToday, "Para Hoje", <Clock className="w-5 h-5" />, "text-blue-600", `${prefix}-today`, "Tudo limpo por aqui!")}
         {renderTaskSection(groupUpcoming, "Próximas", <Calendar className="w-5 h-5" />, "text-purple-600", `${prefix}-upcoming`)}
@@ -590,6 +634,60 @@ export default function App() {
       });
     } catch (e) {
       handleFirestoreError(e, OperationType.UPDATE, `tasks/${draggableId}`);
+    }
+  };
+
+  const [showSubjectModal, setShowSubjectModal] = useState(false);
+  const [showTermModal, setShowTermModal] = useState(false);
+  const [showNoteModal, setShowNoteModal] = useState(false);
+
+  const addSubject = async (name: string, color: string, termId?: string) => {
+    if (!user) return;
+    try {
+      await addDoc(collection(db, 'subjects'), {
+        name,
+        color,
+        termId: termId || null,
+        userId: user.uid,
+        createdAt: new Date().toISOString()
+      });
+      setShowSubjectModal(false);
+    } catch (e) {
+      console.error("Error adding subject:", e);
+    }
+  };
+
+  const addTerm = async (name: string, startDate: string, endDate: string) => {
+    if (!user) return;
+    try {
+      await addDoc(collection(db, 'terms'), {
+        name,
+        startDate,
+        endDate,
+        active: true,
+        userId: user.uid,
+        createdAt: new Date().toISOString()
+      });
+      setShowTermModal(false);
+    } catch (e) {
+      console.error("Error adding term:", e);
+    }
+  };
+
+  const addNote = async (title: string, content: string, subjectId?: string) => {
+    if (!user) return;
+    try {
+      await addDoc(collection(db, 'notes'), {
+        title,
+        content,
+        subjectId: subjectId || null,
+        userId: user.uid,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      });
+      setShowNoteModal(false);
+    } catch (e) {
+      console.error("Error adding note:", e);
     }
   };
 
@@ -760,7 +858,7 @@ export default function App() {
         }
       }
 
-      alert("Sincronização com Google Tasks concluída!");
+      // alert("Sincronização com Google Tasks concluída!");
     } catch (e: any) {
       console.error("Tasks Sync Error:", e);
       
@@ -771,7 +869,7 @@ export default function App() {
           errorMessage.toLowerCase().includes("credentials")) {
         setAccessToken(null);
         sessionStorage.removeItem('google_access_token');
-        alert("Sua sessão do Google expirou. Por favor, faça login novamente.");
+        // alert("Sua sessão do Google expirou. Por favor, faça login novamente.");
         handleSignIn();
         return;
       }
@@ -782,12 +880,12 @@ export default function App() {
         const enableUrl = `https://console.developers.google.com/apis/api/tasks.googleapis.com/overview?project=${projectId}`;
         
         setDiagnosticStatus(prev => ({ ...prev, tasks: 'denied' }));
-        alert(`A API do Google Tasks não está ativada no seu projeto Google Cloud.\n\nPor favor, acesse o link abaixo para ativar a API e tente novamente:\n\n${enableUrl}`);
+        // alert(`A API do Google Tasks não está ativada no seu projeto Google Cloud.\n\nPor favor, acesse o link abaixo para ativar a API e tente novamente:\n\n${enableUrl}`);
         return;
       }
 
       setDiagnosticStatus(prev => ({ ...prev, tasks: 'stable' }));
-      alert(`Erro no Google Tasks: ${errorMessage}`);
+      // alert(`Erro no Google Tasks: ${errorMessage}`);
     } finally {
       setIsSyncingTasks(false);
     }
@@ -986,11 +1084,8 @@ export default function App() {
       
       localStorage.setItem(`last_sync_${user.uid}`, new Date().toISOString());
       
-      if (newlyImported.length > 0) {
-        alert(`Sincronização concluída!\nNovas tarefas: ${newlyImported.length}\nAtualizadas: ${totalUpdated}`);
-      } else {
-        alert(`Sincronização concluída!\nNenhuma tarefa nova.\nAtualizadas: ${totalUpdated}`);
-      }
+      // Removed alerts for direct loading experience
+      console.log(`Sync complete: ${totalImported} imported, ${totalUpdated} updated`);
     } catch (e: any) {
       console.error("Sync Error:", e);
       
@@ -1030,11 +1125,11 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 font-sans flex">
-      {/* Sidebar */}
+    <>
+      <div className="flex min-h-screen bg-slate-50">
       <Sidebar 
-        isOpen={isSidebarOpen} 
-        onClose={() => setIsSidebarOpen(false)} 
+        isOpen={isSidebarOpen}
+        setIsOpen={setIsSidebarOpen}
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         subjects={subjects}
@@ -1042,338 +1137,193 @@ export default function App() {
         profileType={profileType}
         selectedSubjectId={selectedSubjectId}
         setSelectedSubjectId={setSelectedSubjectId}
+        onAddSubject={() => setShowSubjectModal(true)}
+        onAddTerm={() => setShowTermModal(true)}
       />
 
-      {/* Main Content */}
-      <div className="flex-1 flex flex-col min-w-0">
+      <main className="flex-1 p-4 lg:p-8 overflow-x-hidden">
         {/* Header */}
-        <header className="sticky top-0 z-30 bg-white/80 backdrop-blur-md border-b border-slate-100 px-6 py-4">
-          <div className="max-w-5xl mx-auto flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <button onClick={() => setIsSidebarOpen(true)} className="lg:hidden p-2 -ml-2 text-slate-400 hover:bg-slate-100 rounded-xl">
-                <Menu className="w-6 h-6" />
-              </button>
-              <div className="w-10 h-10 bg-blue-600 rounded-xl hidden sm:flex items-center justify-center shadow-md shadow-blue-100">
-                <CheckCircle2 className="w-6 h-6 text-white" />
-              </div>
-              <h1 className="text-xl font-bold tracking-tight hidden sm:block">SmartPlan Pro</h1>
-            </div>
-            
-            <div className="flex-1 max-w-md mx-4 relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-              <input 
-                type="text" 
-                placeholder="Buscar tarefas..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full bg-slate-100 border-none rounded-xl py-2 pl-10 pr-4 focus:ring-2 focus:ring-blue-500 transition-all outline-none text-sm"
-              />
-            </div>
-
-          <div className="flex items-center gap-2">
-            <button className="p-2 hover:bg-slate-100 rounded-xl transition-colors relative">
-              <Bell className="w-5 h-5 text-slate-600" />
-              <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>
-            </button>
+        <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+          <div className="flex items-center gap-4">
             <button 
-              onClick={() => auth.signOut()}
-              className="p-2 hover:bg-slate-100 rounded-xl transition-colors"
+              onClick={() => setIsSidebarOpen(true)}
+              className="lg:hidden p-2 bg-white rounded-xl shadow-sm text-slate-600"
             >
-              <LogOut className="w-5 h-5 text-slate-600" />
+              <Menu className="w-6 h-6" />
             </button>
-            <div className="w-10 h-10 rounded-xl overflow-hidden border-2 border-slate-100">
-              <img src={user.photoURL || ''} alt={user.displayName || ''} referrerPolicy="no-referrer" />
+            <div>
+              <h1 className="text-3xl font-black text-slate-900 tracking-tight">
+                {activeTab === 'tasks' ? (selectedSubjectId ? subjects.find(s => s.id === selectedSubjectId)?.name : 'Minhas Tarefas') :
+                 activeTab === 'kanban' ? 'Quadro Kanban' :
+                 activeTab === 'calendar' ? 'Calendário' :
+                 activeTab === 'reminders' ? 'Lembretes' :
+                 activeTab === 'notes' ? 'Minhas Notas' :
+                 activeTab === 'settings' ? 'Configurações Acadêmicas' : 'Disciplinas'}
+              </h1>
+              <p className="text-slate-500 font-medium">
+                {new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })}
+              </p>
             </div>
           </div>
-        </div>
-      </header>
 
-      <main className="max-w-5xl mx-auto p-6 space-y-8">
-        {/* Dashboard Stats */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 space-y-2">
-            <p className="text-sm font-medium text-slate-500">Hoje</p>
-            <p className="text-3xl font-bold text-blue-600">{todayTasks.length}</p>
-          </div>
-          <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 space-y-2">
-            <p className="text-sm font-medium text-slate-500">Atrasadas</p>
-            <p className="text-3xl font-bold text-red-500">{overdueTasks.length}</p>
-          </div>
-          <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 space-y-2 border-amber-100 bg-amber-50/30">
-            <p className="text-sm font-medium text-amber-700">Atribuídas</p>
-            <div className="flex items-baseline gap-2">
-              <p className="text-3xl font-bold text-amber-500">{assignedTasks.length}</p>
-              {nearOverdueCount > 0 && (
-                <span className="text-xs font-bold text-amber-600 bg-amber-100 px-2 py-0.5 rounded-full animate-pulse">
-                  {nearOverdueCount} Urgentes
-                </span>
+          <div className="flex items-center gap-3">
+            <button 
+              onClick={() => syncClassroom()}
+              disabled={isSyncing}
+              className={cn(
+                "flex items-center gap-2 px-5 py-3 bg-white border-2 border-slate-100 rounded-2xl font-bold text-slate-700 hover:border-blue-500 hover:text-blue-600 transition-all shadow-sm",
+                isSyncing && "opacity-50 cursor-not-allowed"
               )}
-            </div>
-          </div>
-          <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 space-y-2">
-            <p className="text-sm font-medium text-slate-500">Concluídas</p>
-            <p className="text-3xl font-bold text-green-600">{tasks.filter(t => t.completed).length}</p>
-          </div>
-        </div>
-
-        {/* Diagnostics & Health */}
-        <div 
-          onClick={() => setShowDiagnostics(true)}
-          className="bg-slate-900 text-white p-6 rounded-[32px] shadow-xl space-y-4 cursor-pointer hover:bg-slate-800 transition-colors"
-        >
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-bold flex items-center gap-2">
-              <AlertCircle className="w-5 h-5 text-blue-400" />
-              Diagnóstico do Sistema
-            </h2>
-            <span className="text-xs bg-blue-500/20 text-blue-400 px-3 py-1 rounded-full font-bold">Ver Detalhes</span>
-          </div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            <div className="space-y-1">
-              <p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Notificações</p>
-              <div className="text-sm font-semibold flex items-center gap-1.5">
-                <div className={cn("w-2 h-2 rounded-full", diagnosticStatus.notifications === 'active' ? "bg-green-500" : "bg-red-500")} /> 
-                {diagnosticStatus.notifications === 'active' ? 'Ativo' : 'Inativo'}
-              </div>
-            </div>
-            <div className="space-y-1">
-              <p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Sincronização</p>
-              <div className="text-sm font-semibold flex items-center gap-1.5">
-                <div className={cn("w-2 h-2 rounded-full", diagnosticStatus.sync === 'stable' ? "bg-green-500" : "bg-amber-500")} /> 
-                {diagnosticStatus.sync === 'stable' ? 'Estável' : 'Pendente'}
-              </div>
-            </div>
-            <div className="space-y-1">
-              <p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Bateria</p>
-              <div className="text-sm font-semibold flex items-center gap-1.5">
-                <div className="w-2 h-2 bg-amber-500 rounded-full" /> Otimizado
-              </div>
-            </div>
-            <div className="space-y-1">
-              <p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Google Tasks</p>
-              <div className="text-sm font-semibold flex items-center gap-1.5">
-                <div className={cn("w-2 h-2 rounded-full", diagnosticStatus.googleAccount === 'active' ? "bg-green-500" : "bg-slate-500")} /> 
-                {diagnosticStatus.googleAccount === 'active' ? 'Conectado' : 'Pendente'}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Tabs & Role Selector */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 mb-6">
-          <div className="flex gap-4">
-            <button 
-              onClick={() => setActiveTab('tasks')}
-              className={cn("pb-4 px-2 text-sm font-bold transition-all relative", activeTab === 'tasks' ? "text-blue-600" : "text-slate-400")}
             >
-              Tarefas
-              {activeTab === 'tasks' && <motion.div layoutId="tab" className="absolute bottom-0 left-0 right-0 h-1 bg-blue-600 rounded-full" />}
+              <RefreshCw className={cn("w-5 h-5", isSyncing && "animate-spin")} />
+              {isSyncing ? 'Sincronizando...' : 'Classroom'}
             </button>
             <button 
-              onClick={() => setActiveTab('kanban')}
-              className={cn("pb-4 px-2 text-sm font-bold transition-all relative", activeTab === 'kanban' ? "text-blue-600" : "text-slate-400")}
+              onClick={() => setShowCreateModal(true)}
+              className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-2xl font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-200"
             >
-              Kanban
-              {activeTab === 'kanban' && <motion.div layoutId="tab" className="absolute bottom-0 left-0 right-0 h-1 bg-blue-600 rounded-full" />}
-            </button>
-            <button 
-              onClick={() => setActiveTab('calendar')}
-              className={cn("pb-4 px-2 text-sm font-bold transition-all relative", activeTab === 'calendar' ? "text-blue-600" : "text-slate-400")}
-            >
-              Calendário
-              {activeTab === 'calendar' && <motion.div layoutId="tab" className="absolute bottom-0 left-0 right-0 h-1 bg-blue-600 rounded-full" />}
+              <Plus className="w-5 h-5" />
+              Nova Tarefa
             </button>
           </div>
+        </header>
 
-          <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl mb-4 sm:mb-0">
-            {[
-              { id: 'all', label: 'Todos', icon: <Search className="w-3 h-3" /> },
-              { id: 'student', label: 'Aluno', icon: <GraduationCap className="w-3 h-3" /> },
-              { id: 'teacher', label: 'Professor', icon: <Settings className="w-3 h-3" /> }
-            ].map(role => (
-              <button
-                key={role.id}
-                onClick={() => setRoleFilter(role.id as any)}
-                className={cn(
-                  "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all",
-                  roleFilter === role.id 
-                    ? "bg-white text-blue-600 shadow-sm" 
-                    : "text-slate-500 hover:text-slate-700"
-                )}
-              >
-                {role.icon}
-                {role.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {activeTab === 'tasks' ? (
-          <DragDropContext onDragEnd={handleDragEnd}>
-            <div className="space-y-12">
-              {/* Quick Actions & Filters */}
-              <div className="flex flex-col gap-6">
-                <div className="flex flex-wrap gap-3">
-                  <button 
-                    onClick={() => setShowCreateModal(true)}
-                    className="bg-blue-600 text-white px-6 py-3 rounded-2xl font-semibold flex items-center gap-2 hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 active:scale-95"
-                  >
-                    <Plus className="w-5 h-5" />
-                    Nova Tarefa
-                  </button>
-                  <button 
-                    onClick={syncClassroom}
-                    disabled={isSyncing}
-                    className={cn(
-                      "bg-white text-slate-700 px-6 py-3 rounded-2xl font-semibold flex items-center gap-2 hover:bg-slate-50 transition-all border border-slate-200 active:scale-95",
-                      isSyncing && "opacity-50 cursor-not-allowed"
-                    )}
-                  >
-                    {isSyncing ? (
-                      <RefreshCw className="w-5 h-5 animate-spin" />
-                    ) : (
-                      <GraduationCap className="w-5 h-5" />
-                    )}
-                    {isSyncing ? "Sincronizando..." : "Sincronizar Classroom"}
-                  </button>
-                  <button 
-                    onClick={syncGoogleTasks}
-                    disabled={isSyncingTasks}
-                    className={cn(
-                      "bg-white text-slate-700 px-6 py-3 rounded-2xl font-semibold flex items-center gap-2 hover:bg-slate-50 transition-all border border-slate-200 active:scale-95",
-                      isSyncingTasks && "opacity-50 cursor-not-allowed"
-                    )}
-                  >
-                    {isSyncingTasks ? (
-                      <RefreshCw className="w-5 h-5 animate-spin" />
-                    ) : (
-                      <RefreshCw className="w-5 h-5" />
-                    )}
-                    {isSyncingTasks ? "Sincronizando..." : "Google Tasks"}
-                  </button>
-                </div>
-
-                <div className="flex items-center gap-2 overflow-x-auto pb-2 no-scrollbar">
-                  <Filter className="w-4 h-4 text-slate-400 mr-2 shrink-0" />
-                  {[
-                    { id: 'all', label: 'Todas' },
-                    { id: 'local', label: 'Locais' },
-                    { id: 'classroom', label: 'Classroom' },
-                    { id: 'tasks', label: 'Google Tasks' }
-                  ].map(filter => (
-                    <button
-                      key={filter.id}
-                      onClick={() => setSourceFilter(filter.id as any)}
-                      className={cn(
-                        "px-4 py-1.5 rounded-full text-sm font-medium transition-all whitespace-nowrap border-2",
-                        sourceFilter === filter.id 
-                          ? "bg-slate-900 border-slate-900 text-white" 
-                          : "bg-white border-slate-100 text-slate-500 hover:border-slate-200"
-                      )}
-                    >
-                      {filter.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Task Lists */}
-              <div className="space-y-16">
-                {roleFilter === 'all' && studentTasks.length > 0 && teacherTasks.length > 0 ? (
-                  <>
-                    <div className="space-y-8">
-                      <div className="flex items-center gap-3 mb-6">
-                        <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
-                          <GraduationCap className="w-6 h-6 text-blue-600" />
-                        </div>
-                        <h2 className="text-2xl font-black text-slate-900 tracking-tight">Como Aluno</h2>
-                      </div>
-                      {renderTaskGroup(studentTasks, 'student')}
-                    </div>
-                    
-                    <div className="pt-8 border-t border-slate-100 space-y-8">
-                      <div className="flex items-center gap-3 mb-6">
-                        <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center">
-                          <Settings className="w-6 h-6 text-purple-600" />
-                        </div>
-                        <h2 className="text-2xl font-black text-slate-900 tracking-tight">Como Professor</h2>
-                      </div>
-                      {renderTaskGroup(teacherTasks, 'teacher')}
-                    </div>
-                  </>
-                ) : (
-                  renderTaskGroup(filteredTasks, 'all')
-                )}
-
-                {tasks.filter(t => t.source === 'classroom').length === 0 && (
-                  <div className="bg-blue-50 border border-blue-100 rounded-3xl p-8 flex flex-col items-center text-center space-y-4">
-                    <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
-                      <GraduationCap className="w-6 h-6 text-blue-600" />
-                    </div>
-                    <div className="space-y-1">
-                      <h3 className="font-bold text-blue-900">Sincronize com o Google Classroom</h3>
-                      <p className="text-xs text-blue-700 max-w-xs">Importe suas tarefas, prazos e notas automaticamente para organizar seus estudos.</p>
-                    </div>
-                    <button 
-                      onClick={() => setShowDiagnostics(true)}
-                      className="text-xs font-bold text-blue-600 hover:underline flex items-center gap-1"
-                    >
-                      <AlertCircle className="w-3 h-3" />
-                      Como ativar?
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
-          </DragDropContext>
-        ) : activeTab === 'kanban' ? (
-          <DragDropContext onDragEnd={handleDragEnd}>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {/* Filters & Tabs (Only for tasks/kanban/calendar) */}
+        {(activeTab === 'tasks' || activeTab === 'kanban' || activeTab === 'calendar') && (
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+            <div className="flex items-center gap-2 bg-white p-1 rounded-2xl shadow-sm border border-slate-100">
               {[
-                { id: 'todo', title: 'A Fazer', color: 'bg-slate-100', text: 'text-slate-700' },
-                { id: 'in-progress', title: 'Em Progresso', color: 'bg-blue-50', text: 'text-blue-700' },
-                { id: 'done', title: 'Concluído', color: 'bg-green-50', text: 'text-green-700' }
-              ].map(column => (
-                <div key={column.id} className={cn("rounded-3xl p-4 min-h-[500px]", column.color)}>
-                  <h3 className={cn("font-bold mb-4 px-2", column.text)}>{column.title}</h3>
-                  <Droppable droppableId={`kanban-${column.id}`}>
-                    {(provided) => (
-                      <div 
-                        className="space-y-3 min-h-[400px]"
-                        {...provided.droppableProps}
-                        ref={provided.innerRef}
-                      >
-                        {filteredTasks
-                          .filter(t => (t.status || 'todo') === column.id)
-                          .sort((a, b) => (a.order || 0) - (b.order || 0))
-                          .map((task, index) => (
-                            <DraggableComponent key={task.id} draggableId={task.id} index={index}>
-                              {(provided: any, snapshot: any) => (
-                                <div
-                                  ref={provided.innerRef}
-                                  {...provided.draggableProps}
-                                  {...provided.dragHandleProps}
-                                  style={{
-                                    ...provided.draggableProps.style,
-                                    opacity: snapshot.isDragging ? 0.8 : 1,
-                                  }}
-                                >
-                                  <TaskCard task={task} onToggle={() => toggleTask(task)} onDelete={() => deleteTask(task)} />
-                                </div>
-                              )}
-                            </DraggableComponent>
-                          ))}
-                        {provided.placeholder}
-                      </div>
-                    )}
-                  </Droppable>
-                </div>
+                { id: 'tasks', label: 'Lista', icon: <CheckSquare className="w-4 h-4" /> },
+                { id: 'kanban', label: 'Kanban', icon: <BookOpen className="w-4 h-4" /> },
+                { id: 'calendar', label: 'Calendário', icon: <Calendar className="w-4 h-4" /> }
+              ].map(tab => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id as any)}
+                  className={cn(
+                    "flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all",
+                    activeTab === tab.id ? "bg-blue-600 text-white shadow-md shadow-blue-100" : "text-slate-500 hover:bg-slate-50"
+                  )}
+                >
+                  {tab.icon}
+                  {tab.label}
+                </button>
               ))}
             </div>
-          </DragDropContext>
-        ) : (
-          <CalendarView tasks={filteredTasks} />
+
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="relative group">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
+                <input 
+                  type="text"
+                  placeholder="Buscar tarefas..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-11 pr-4 py-2.5 bg-white border-2 border-slate-100 rounded-2xl text-sm font-medium focus:border-blue-500 outline-none transition-all w-full md:w-64"
+                />
+              </div>
+              
+              <select 
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value as any)}
+                className="px-4 py-2.5 bg-white border-2 border-slate-100 rounded-2xl text-sm font-bold text-slate-700 outline-none focus:border-blue-500 transition-all"
+              >
+                <option value="all">Todos Status</option>
+                <option value="todo">A Fazer</option>
+                <option value="in-progress">Em Progresso</option>
+                <option value="done">Concluído</option>
+              </select>
+
+              <select 
+                value={priorityFilter}
+                onChange={(e) => setPriorityFilter(e.target.value as any)}
+                className="px-4 py-2.5 bg-white border-2 border-slate-100 rounded-2xl text-sm font-bold text-slate-700 outline-none focus:border-blue-500 transition-all"
+              >
+                <option value="all">Prioridades</option>
+                <option value="high">Alta</option>
+                <option value="medium">Média</option>
+                <option value="low">Baixa</option>
+              </select>
+            </div>
+          </div>
         )}
+
+        {/* Main Content Area */}
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={activeTab + (selectedSubjectId || '')}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.2 }}
+          >
+            {activeTab === 'tasks' ? (
+              <DragDropContext onDragEnd={handleDragEnd}>
+                {renderTaskGroup(filteredTasks, 'main')}
+              </DragDropContext>
+            ) : activeTab === 'kanban' ? (
+              <DragDropContext onDragEnd={handleDragEnd}>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  {[
+                    { id: 'todo', title: 'A Fazer', color: 'bg-slate-100', text: 'text-slate-700' },
+                    { id: 'in-progress', title: 'Em Progresso', color: 'bg-blue-50', text: 'text-blue-700' },
+                    { id: 'done', title: 'Concluído', color: 'bg-green-50', text: 'text-green-700' }
+                  ].map(column => (
+                    <div key={column.id} className={cn("rounded-3xl p-4 min-h-[500px]", column.color)}>
+                      <h3 className={cn("font-bold mb-4 px-2", column.text)}>{column.title}</h3>
+                      <Droppable droppableId={`kanban-${column.id}`}>
+                        {(provided) => (
+                          <div 
+                            className="space-y-3 min-h-[400px]"
+                            {...provided.droppableProps}
+                            ref={provided.innerRef}
+                          >
+                            {filteredTasks
+                              .filter(t => (t.status || 'todo') === column.id)
+                              .sort((a, b) => (a.order || 0) - (b.order || 0))
+                              .map((task, index) => (
+                                <DraggableComponent key={task.id} draggableId={task.id} index={index}>
+                                  {(provided: any, snapshot: any) => (
+                                    <div
+                                      ref={provided.innerRef}
+                                      {...provided.draggableProps}
+                                      {...provided.dragHandleProps}
+                                      style={{
+                                        ...provided.draggableProps.style,
+                                        opacity: snapshot.isDragging ? 0.8 : 1,
+                                      }}
+                                    >
+                                      <TaskCard task={task} onToggle={() => toggleTask(task)} onDelete={() => deleteTask(task)} />
+                                    </div>
+                                  )}
+                                </DraggableComponent>
+                              ))}
+                            {provided.placeholder}
+                          </div>
+                        )}
+                      </Droppable>
+                    </div>
+                  ))}
+                </div>
+              </DragDropContext>
+            ) : activeTab === 'calendar' ? (
+              <CalendarView tasks={filteredTasks} />
+            ) : activeTab === 'notes' ? (
+              <NotesView notes={notes} subjects={subjects} onAddNote={() => setShowNoteModal(true)} />
+            ) : activeTab === 'reminders' ? (
+              <RemindersView tasks={tasks.filter(t => t.reminderConfig)} />
+            ) : activeTab === 'settings' ? (
+              <AcademicSettingsView 
+                profileType={profileType} 
+                setProfileType={setProfileType}
+                terms={terms}
+                onAddTerm={() => setShowTermModal(true)}
+              />
+            ) : (
+              <SubjectsView subjects={subjects} terms={terms} onAddSubject={() => setShowSubjectModal(true)} />
+            )}
+          </motion.div>
+        </AnimatePresence>
       </main>
       </div>
 
@@ -1464,6 +1414,7 @@ export default function App() {
             categories={customCategories}
             setCategories={setCustomCategories}
             initialRole={roleFilter === 'all' ? 'student' : roleFilter}
+            subjects={subjects}
             onTaskCreated={(task) => {
               if (accessToken) syncGoogleCalendar(task);
             }}
@@ -1484,7 +1435,7 @@ export default function App() {
         <button className="p-2 text-slate-400"><GraduationCap className="w-6 h-6" /></button>
         <button className="p-2 text-slate-400"><Settings className="w-6 h-6" /></button>
       </nav>
-    </div>
+    </>
   );
 }
 
@@ -1773,7 +1724,7 @@ function ReminderConfigurator({ onSave, onCancel, initialDueDate }: { onSave: (c
           {type === 'once' && <p className="mt-1 opacity-80">Lembrete único no horário do prazo.</p>}
           {type === 'repeated' && <p className="mt-1 opacity-80">Repetirá a cada {interval} minutos até a conclusão.</p>}
           {type === 'nagging' && <p className="mt-1 opacity-80">Repetirá a cada {interval} minutos até ser confirmado.</p>}
-          {type === 'progressive' && <p className="mt-1 opacity-80">Repetirá com intervalos diminuindo em {progressiveStep} minutos.</p>}
+          {type === 'progressive' && <p className="mt-1 opacity-80">Repetirá com intervalos aumentando em {progressiveStep} minutos a cada repetição.</p>}
         </div>
       </div>
 
@@ -1948,11 +1899,14 @@ function TaskCard({ task, onToggle, onDelete }: { task: Task, onToggle: () => vo
         onClick={onToggle}
         className={cn(
           "w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all",
-          task.completed ? "bg-green-500 border-green-500 text-white" : "border-slate-300 hover:border-blue-500",
-          isNearOverdue && !task.completed && "border-amber-400"
+          task.status === 'done' ? "bg-green-500 border-green-500 text-white" : 
+          task.status === 'in-progress' ? "bg-blue-500 border-blue-500 text-white" :
+          "border-slate-300 hover:border-blue-500",
+          isNearOverdue && task.status === 'todo' && "border-amber-400"
         )}
       >
-        {task.completed && <CheckCircle2 className="w-4 h-4" />}
+        {task.status === 'done' && <CheckCircle2 className="w-4 h-4" />}
+        {task.status === 'in-progress' && <Clock className="w-4 h-4" />}
       </button>
       
       <div className="flex-1 min-w-0">
@@ -2063,11 +2017,12 @@ function TaskCard({ task, onToggle, onDelete }: { task: Task, onToggle: () => vo
   );
 }
 
-function CreateTaskModal({ onClose, userId, categories, setCategories, onTaskCreated, initialRole }: { onClose: () => void, userId: string, categories: string[], setCategories: (cats: string[]) => void, onTaskCreated?: (task: Task) => void, initialRole?: 'student' | 'teacher' }) {
+function CreateTaskModal({ onClose, userId, categories, setCategories, onTaskCreated, initialRole, subjects }: { onClose: () => void, userId: string, categories: string[], setCategories: (cats: string[]) => void, onTaskCreated?: (task: Task) => void, initialRole?: 'student' | 'teacher', subjects: Subject[] }) {
   const [title, setTitle] = useState('');
   const [date, setDate] = useState('');
   const [priority, setPriority] = useState<'low' | 'medium' | 'high'>('medium');
   const [category, setCategory] = useState(categories[0] || 'Geral');
+  const [subjectId, setSubjectId] = useState<string>('');
   const [role, setRole] = useState<'student' | 'teacher'>(initialRole || 'student');
   const [newCat, setNewCat] = useState('');
   const [editingCat, setEditingCat] = useState<string | null>(null);
@@ -2092,6 +2047,7 @@ function CreateTaskModal({ onClose, userId, categories, setCategories, onTaskCre
         completed: false,
         priority,
         category: category.substring(0, 200),
+        subjectId: subjectId || null,
         role,
         source: 'local' as const,
         userId,
@@ -2103,6 +2059,7 @@ function CreateTaskModal({ onClose, userId, categories, setCategories, onTaskCre
           intervalMinutes: interval,
           nextReminder: reminderType === 'once' ? new Date(date).toISOString() : new Date(new Date(date).getTime() - interval * 60000).toISOString(),
           repeatUntilAcknowledged: repeatUntilAck,
+          repeatCount: 0,
           ...(reminderType === 'progressive' ? { progressiveStepMinutes: progressiveStep } : {})
         }
       };
@@ -2202,6 +2159,19 @@ function CreateTaskModal({ onClose, userId, categories, setCategories, onTaskCre
                 <option value="low">Baixa</option>
                 <option value="medium">Média</option>
                 <option value="high">Alta</option>
+              </select>
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-semibold text-slate-700">Disciplina</label>
+              <select 
+                value={subjectId}
+                onChange={(e) => setSubjectId(e.target.value)}
+                className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl p-4 focus:border-blue-500 transition-all outline-none appearance-none"
+              >
+                <option value="">Nenhuma</option>
+                {subjects.map(s => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
+                ))}
               </select>
             </div>
             <div className="space-y-2">
@@ -2390,6 +2360,446 @@ function CreateTaskModal({ onClose, userId, categories, setCategories, onTaskCre
             Criar Tarefa
           </button>
         </form>
+      </motion.div>
+    </div>
+  );
+}
+
+// --- New View Components ---
+
+function SubjectsView({ subjects, terms, onAddSubject }: { subjects: Subject[], terms: AcademicTerm[], onAddSubject: () => void }) {
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h2 className="text-xl font-bold text-slate-800">Minhas Disciplinas</h2>
+        <button onClick={onAddSubject} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl font-bold text-sm hover:bg-blue-700 transition-all">
+          <Plus className="w-4 h-4" />
+          Nova Disciplina
+        </button>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {subjects.map(subject => (
+          <div key={subject.id} className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 hover:shadow-md transition-all group">
+            <div className="flex items-center justify-between mb-4">
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white font-bold" style={{ backgroundColor: subject.color }}>
+                {subject.name.charAt(0).toUpperCase()}
+              </div>
+              <button className="text-slate-400 hover:text-slate-600 opacity-0 group-hover:opacity-100 transition-all">
+                <Settings className="w-4 h-4" />
+              </button>
+            </div>
+            <h3 className="font-bold text-slate-800 mb-1">{subject.name}</h3>
+            <p className="text-xs text-slate-500">
+              {terms.find(t => t.id === subject.termId)?.name || 'Sem período definido'}
+            </p>
+          </div>
+        ))}
+        {subjects.length === 0 && (
+          <div className="col-span-full py-12 text-center bg-white rounded-3xl border-2 border-dashed border-slate-200">
+            <BookOpen className="w-12 h-12 text-slate-300 mx-auto mb-4" />
+            <p className="text-slate-500 font-medium">Nenhuma disciplina cadastrada ainda.</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function SubjectsView({ subjects, terms, onAddSubject }: { subjects: Subject[], terms: AcademicTerm[], onAddSubject: () => void }) {
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h2 className="text-xl font-bold text-slate-800">Minhas Disciplinas</h2>
+        <button onClick={onAddSubject} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl font-bold text-sm hover:bg-blue-700 transition-all">
+          <Plus className="w-4 h-4" />
+          Nova Disciplina
+        </button>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {subjects.map(subject => (
+          <div key={subject.id} className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 hover:shadow-md transition-all">
+            <div className="flex items-center justify-between mb-4">
+              <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-white shadow-lg" style={{ backgroundColor: subject.color }}>
+                <BookOpen className="w-6 h-6" />
+              </div>
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                {terms.find(t => t.id === subject.termId)?.name || 'Sem Período'}
+              </span>
+            </div>
+            <h3 className="text-lg font-bold text-slate-800 mb-1">{subject.name}</h3>
+            <p className="text-xs text-slate-500 font-medium">
+              Criada em {new Date(subject.createdAt).toLocaleDateString()}
+            </p>
+          </div>
+        ))}
+        {subjects.length === 0 && (
+          <div className="col-span-full py-12 text-center bg-white rounded-3xl border-2 border-dashed border-slate-200">
+            <BookOpen className="w-12 h-12 text-slate-300 mx-auto mb-4" />
+            <p className="text-slate-500 font-medium">Nenhuma disciplina cadastrada ainda.</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function NotesView({ notes, subjects, onAddNote }: { notes: Note[], subjects: Subject[], onAddNote: () => void }) {
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h2 className="text-xl font-bold text-slate-800">Minhas Notas</h2>
+        <button onClick={onAddNote} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl font-bold text-sm hover:bg-blue-700 transition-all">
+          <Plus className="w-4 h-4" />
+          Nova Nota
+        </button>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {notes.map(note => (
+          <div key={note.id} className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 hover:shadow-md transition-all">
+            <div className="flex items-center gap-2 mb-3">
+              <div 
+                className="w-2 h-2 rounded-full" 
+                style={{ backgroundColor: subjects.find(s => s.id === note.subjectId)?.color || '#cbd5e1' }} 
+              />
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                {subjects.find(s => s.id === note.subjectId)?.name || 'Geral'}
+              </span>
+            </div>
+            <h3 className="font-bold text-slate-800 mb-2">{note.title}</h3>
+            <p className="text-sm text-slate-500 line-clamp-3 mb-4">{note.content}</p>
+            <p className="text-[10px] text-slate-400 font-medium">
+              Atualizado em {new Date(note.updatedAt).toLocaleDateString()}
+            </p>
+          </div>
+        ))}
+        {notes.length === 0 && (
+          <div className="col-span-full py-12 text-center bg-white rounded-3xl border-2 border-dashed border-slate-200">
+            <StickyNote className="w-12 h-12 text-slate-300 mx-auto mb-4" />
+            <p className="text-slate-500 font-medium">Nenhuma nota criada ainda.</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function RemindersView({ tasks }: { tasks: Task[] }) {
+  return (
+    <div className="space-y-6">
+      <h2 className="text-xl font-bold text-slate-800">Lembretes Ativos</h2>
+      <div className="space-y-3">
+        {tasks.map(task => (
+          <div key={task.id} className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center">
+                <Bell className="w-5 h-5 text-blue-600" />
+              </div>
+              <div>
+                <h3 className="font-bold text-slate-800 text-sm">{task.title}</h3>
+                <div className="flex items-center gap-2 text-xs text-slate-500">
+                  <Clock className="w-3 h-3" />
+                  <span>Próximo: {task.reminderConfig?.nextReminder ? new Date(task.reminderConfig.nextReminder).toLocaleString() : 'Pendente'}</span>
+                  <span className="px-2 py-0.5 bg-slate-100 rounded-full text-[10px] font-bold uppercase">
+                    {task.reminderConfig?.type}
+                  </span>
+                </div>
+              </div>
+            </div>
+            <button className="text-slate-400 hover:text-red-500 p-2 transition-colors">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        ))}
+        {tasks.length === 0 && (
+          <div className="py-12 text-center bg-white rounded-3xl border-2 border-dashed border-slate-200">
+            <Bell className="w-12 h-12 text-slate-300 mx-auto mb-4" />
+            <p className="text-slate-500 font-medium">Nenhum lembrete configurado.</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function AcademicSettingsView({ profileType, setProfileType, terms, onAddTerm }: { 
+  profileType: StudentProfileType, 
+  setProfileType: (type: StudentProfileType) => void,
+  terms: AcademicTerm[],
+  onAddTerm: () => void
+}) {
+  return (
+    <div className="space-y-8 max-w-2xl">
+      <section className="space-y-4">
+        <h2 className="text-xl font-bold text-slate-800">Tipo de Perfil Acadêmico</h2>
+        <div className="grid grid-cols-2 gap-4">
+          <button 
+            onClick={() => setProfileType('school')}
+            className={cn(
+              "p-6 rounded-3xl border-2 transition-all text-left space-y-2",
+              profileType === 'school' ? "border-blue-600 bg-blue-50" : "border-slate-100 bg-white hover:border-slate-200"
+            )}
+          >
+            <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center", profileType === 'school' ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-400")}>
+              <GraduationCap className="w-6 h-6" />
+            </div>
+            <h3 className="font-bold text-slate-800">Escolar</h3>
+            <p className="text-xs text-slate-500">Organizado por séries, anos ou bimestres.</p>
+          </button>
+          <button 
+            onClick={() => setProfileType('university')}
+            className={cn(
+              "p-6 rounded-3xl border-2 transition-all text-left space-y-2",
+              profileType === 'university' ? "border-blue-600 bg-blue-50" : "border-slate-100 bg-white hover:border-slate-200"
+            )}
+          >
+            <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center", profileType === 'university' ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-400")}>
+              <BookOpen className="w-6 h-6" />
+            </div>
+            <h3 className="font-bold text-slate-800">Universitário</h3>
+            <p className="text-xs text-slate-500">Organizado por semestres e créditos.</p>
+          </button>
+        </div>
+      </section>
+
+      <section className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-xl font-bold text-slate-800">Períodos Letivos</h2>
+          <button onClick={onAddTerm} className="text-blue-600 font-bold text-sm hover:underline flex items-center gap-1">
+            <Plus className="w-4 h-4" />
+            Adicionar Período
+          </button>
+        </div>
+        <div className="space-y-3">
+          {terms.map(term => (
+            <div key={term.id} className="bg-white p-4 rounded-2xl border border-slate-100 flex items-center justify-between">
+              <div>
+                <h3 className="font-bold text-slate-800">{term.name}</h3>
+                <p className="text-xs text-slate-500">
+                  {new Date(term.startDate).toLocaleDateString()} - {new Date(term.endDate).toLocaleDateString()}
+                </p>
+              </div>
+              {term.active && (
+                <span className="px-3 py-1 bg-green-100 text-green-700 text-[10px] font-bold rounded-full uppercase">Ativo</span>
+              )}
+            </div>
+          ))}
+          {terms.length === 0 && (
+            <p className="text-sm text-slate-500 italic">Nenhum período cadastrado.</p>
+          )}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+// --- Modals ---
+
+function CreateSubjectModal({ onClose, onSave, terms }: { onClose: () => void, onSave: (name: string, color: string, termId?: string) => void, terms: AcademicTerm[] }) {
+  const [name, setName] = useState('');
+  const [color, setColor] = useState('#3b82f6');
+  const [termId, setTermId] = useState('');
+
+  const colors = ['#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4', '#f97316'];
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.9 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="bg-white rounded-[32px] p-8 max-w-md w-full shadow-2xl space-y-6"
+      >
+        <div className="flex items-center justify-between">
+          <h2 className="text-2xl font-bold text-slate-900">Nova Disciplina</h2>
+          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-xl transition-colors">
+            <X className="w-5 h-5 text-slate-400" />
+          </button>
+        </div>
+
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Nome da Disciplina</label>
+            <input 
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="w-full px-4 py-3 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:border-blue-500 outline-none transition-all"
+              placeholder="Ex: Cálculo I, História..."
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Período Letivo</label>
+            <select 
+              value={termId}
+              onChange={(e) => setTermId(e.target.value)}
+              className="w-full px-4 py-3 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:border-blue-500 outline-none transition-all"
+            >
+              <option value="">Selecione um período</option>
+              {terms.map(term => (
+                <option key={term.id} value={term.id}>{term.name}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Cor de Identificação</label>
+            <div className="flex flex-wrap gap-2">
+              {colors.map(c => (
+                <button
+                  key={c}
+                  onClick={() => setColor(c)}
+                  className={cn(
+                    "w-8 h-8 rounded-full transition-all border-2",
+                    color === c ? "border-slate-900 scale-110" : "border-transparent hover:scale-105"
+                  )}
+                  style={{ backgroundColor: c }}
+                />
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <button 
+          onClick={() => onSave(name, color, termId)}
+          disabled={!name}
+          className="w-full py-4 bg-blue-600 text-white rounded-2xl font-bold text-lg shadow-lg shadow-blue-200 hover:bg-blue-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          Criar Disciplina
+        </button>
+      </motion.div>
+    </div>
+  );
+}
+
+function CreateTermModal({ onClose, onSave }: { onClose: () => void, onSave: (name: string, start: string, end: string) => void }) {
+  const [name, setName] = useState('');
+  const [start, setStart] = useState('');
+  const [end, setEnd] = useState('');
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.9 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="bg-white rounded-[32px] p-8 max-w-md w-full shadow-2xl space-y-6"
+      >
+        <div className="flex items-center justify-between">
+          <h2 className="text-2xl font-bold text-slate-900">Novo Período</h2>
+          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-xl transition-colors">
+            <X className="w-5 h-5 text-slate-400" />
+          </button>
+        </div>
+
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Nome do Período</label>
+            <input 
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="w-full px-4 py-3 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:border-blue-500 outline-none transition-all"
+              placeholder="Ex: 1º Semestre 2024, 9º Ano..."
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Início</label>
+              <input 
+                type="date"
+                value={start}
+                onChange={(e) => setStart(e.target.value)}
+                className="w-full px-4 py-3 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:border-blue-500 outline-none transition-all"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Fim</label>
+              <input 
+                type="date"
+                value={end}
+                onChange={(e) => setEnd(e.target.value)}
+                className="w-full px-4 py-3 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:border-blue-500 outline-none transition-all"
+              />
+            </div>
+          </div>
+        </div>
+
+        <button 
+          onClick={() => onSave(name, start, end)}
+          disabled={!name || !start || !end}
+          className="w-full py-4 bg-blue-600 text-white rounded-2xl font-bold text-lg shadow-lg shadow-blue-200 hover:bg-blue-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          Criar Período
+        </button>
+      </motion.div>
+    </div>
+  );
+}
+
+function CreateNoteModal({ onClose, onSave, subjects }: { onClose: () => void, onSave: (title: string, content: string, subjectId?: string) => void, subjects: Subject[] }) {
+  const [title, setTitle] = useState('');
+  const [content, setContent] = useState('');
+  const [subjectId, setSubjectId] = useState('');
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.9 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="bg-white rounded-[32px] p-8 max-w-lg w-full shadow-2xl space-y-6"
+      >
+        <div className="flex items-center justify-between">
+          <h2 className="text-2xl font-bold text-slate-900">Nova Nota</h2>
+          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-xl transition-colors">
+            <X className="w-5 h-5 text-slate-400" />
+          </button>
+        </div>
+
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Título</label>
+            <input 
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              className="w-full px-4 py-3 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:border-blue-500 outline-none transition-all font-bold"
+              placeholder="Título da nota..."
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Disciplina</label>
+            <select 
+              value={subjectId}
+              onChange={(e) => setSubjectId(e.target.value)}
+              className="w-full px-4 py-3 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:border-blue-500 outline-none transition-all"
+            >
+              <option value="">Geral (Sem disciplina)</option>
+              {subjects.map(subject => (
+                <option key={subject.id} value={subject.id}>{subject.name}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Conteúdo</label>
+            <textarea 
+              value={content}
+              onChange={(e) => setContent(e.target.value)}
+              rows={6}
+              className="w-full px-4 py-3 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:border-blue-500 outline-none transition-all resize-none"
+              placeholder="Escreva suas anotações aqui..."
+            />
+          </div>
+        </div>
+
+        <button 
+          onClick={() => onSave(title, content, subjectId)}
+          disabled={!title || !content}
+          className="w-full py-4 bg-blue-600 text-white rounded-2xl font-bold text-lg shadow-lg shadow-blue-200 hover:bg-blue-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          Salvar Nota
+        </button>
       </motion.div>
     </div>
   );

@@ -49,16 +49,20 @@ export type StudentProfileType = 'school' | 'university';
 export interface AcademicTerm {
   id: string;
   name: string;
-  isActive: boolean;
-  startDate?: string;
-  endDate?: string;
+  active: boolean;
+  startDate: string;
+  endDate: string;
+  userId: string;
+  createdAt: string;
 }
 
 export interface Subject {
   id: string;
   name: string;
   color: string;
-  termIds: string[];
+  termId: string | null;
+  userId: string;
+  createdAt: string;
 }
 
 export interface UserProfile {
@@ -69,4 +73,14 @@ export interface UserProfile {
   profileType?: StudentProfileType;
   quietHoursStart?: string; // e.g., "22:00"
   quietHoursEnd?: string;   // e.g., "07:00"
+}
+
+export interface Note {
+  id: string;
+  title: string;
+  content: string;
+  subjectId?: string;
+  userId: string;
+  createdAt: any;
+  updatedAt: any;
 }
