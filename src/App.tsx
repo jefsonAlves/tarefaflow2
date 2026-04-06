@@ -137,6 +137,10 @@ import { Task, TaskStatus, ReminderConfig, StudentProfileType, AcademicTerm, Sub
 
 import { Sidebar } from './components/Sidebar';
 import { TaskActionMenu } from './components/TaskActionMenu';
+import { TaskDashboardSummary } from './components/TaskDashboardSummary';
+import { SettingsView } from './components/SettingsView';
+import { BottomNavigation } from './components/BottomNavigation';
+import { EnvironmentSwitcher } from './components/EnvironmentSwitcher';
 import { CheckSquare, BookOpen, StickyNote, X } from 'lucide-react';
 
 export default function App() {
@@ -144,6 +148,7 @@ export default function App() {
   const [accessToken, setAccessToken] = useState<string | null>(sessionStorage.getItem('google_access_token'));
   const [loading, setLoading] = useState(true);
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [userRole, setUserRole] = useState<'student' | 'teacher'>('student');
   
   // Academic Structure State
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -161,7 +166,7 @@ export default function App() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [isSyncingTasks, setIsSyncingTasks] = useState(false);
   const [isSyncingCalendar, setIsSyncingCalendar] = useState(false);
-  const [activeTab, setActiveTab] = useState<'tasks' | 'calendar' | 'kanban' | 'subjects' | 'reminders' | 'notes' | 'settings'>('tasks');
+  const [activeTab, setActiveTab] = useState<string>('tasks');
   const [roleFilter, setRoleFilter] = useState<'all' | 'student' | 'teacher'>('all');
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [showDiagnostics, setShowDiagnostics] = useState(false);
@@ -1295,6 +1300,8 @@ export default function App() {
           >
             {activeTab === 'tasks' ? (
               <DragDropContext onDragEnd={handleDragEnd}>
+                <EnvironmentSwitcher role={userRole} setRole={setUserRole} />
+                <TaskDashboardSummary tasks={filteredTasks} />
                 {renderTaskGroup(filteredTasks, 'main')}
               </DragDropContext>
             ) : activeTab === 'kanban' ? (
@@ -1349,18 +1356,14 @@ export default function App() {
             ) : activeTab === 'reminders' ? (
               <RemindersView tasks={tasks.filter(t => t.reminderConfig)} />
             ) : activeTab === 'settings' ? (
-              <AcademicSettingsView 
-                profileType={profileType} 
-                setProfileType={setProfileType}
-                terms={terms}
-                onAddTerm={() => setShowTermModal(true)}
-              />
+              <SettingsView />
             ) : (
               <SubjectsView subjects={subjects} terms={terms} onAddSubject={() => setShowSubjectModal(true)} />
             )}
           </motion.div>
         </AnimatePresence>
       </main>
+      <BottomNavigation activeTab={activeTab} setActiveTab={setActiveTab} />
       </div>
 
       {/* Onboarding Tour Overlay */}
