@@ -430,19 +430,39 @@ export default function App() {
           }
         }
 
-        // Handle standard 24h proactive notifications
+        // Handle standard proactive notifications
         if (task.hasDueDate) {
           const dueDate = new Date(task.dueDate);
           const diffHours = (dueDate.getTime() - now.getTime()) / (1000 * 60 * 60);
 
-          // Notify if due within 24 hours and not already notified
-          if (diffHours > 0 && diffHours <= 24 && !notifiedTasks[task.id]) {
-            triggerNotification(`Tarefa Próxima do Prazo: ${task.title}`, {
-              body: `Vence em ${Math.round(diffHours)} horas.`,
-              icon: '/favicon.ico'
-            });
-            notifiedTasks[task.id] = true;
-            updated = true;
+          // Notify if due within 48 hours or overdue by up to 24 hours
+          if (diffHours <= 48 && diffHours > -24) {
+            const lastNotified = notifiedTasks[task.id];
+            let shouldNotify = false;
+
+            if (!lastNotified) {
+              shouldNotify = true;
+            } else if (typeof lastNotified === 'number') {
+              shouldNotify = (now.getTime() - lastNotified) >= 24 * 60 * 60 * 1000;
+            } else {
+              // Legacy boolean format
+              shouldNotify = true;
+            }
+
+            if (shouldNotify) {
+              const isOverdue = diffHours < 0;
+              const title = isOverdue ? `Tarefa Atrasada: ${task.title}` : `Tarefa Próxima do Prazo: ${task.title}`;
+              const body = isOverdue 
+                ? `O prazo expirou há ${Math.round(Math.abs(diffHours))} horas e ainda não foi concluída.` 
+                : `Vence em ${Math.round(diffHours)} horas e ainda não foi concluída.`;
+
+              triggerNotification(title, {
+                body,
+                icon: '/favicon.ico'
+              });
+              notifiedTasks[task.id] = now.getTime();
+              updated = true;
+            }
           }
         }
       });
