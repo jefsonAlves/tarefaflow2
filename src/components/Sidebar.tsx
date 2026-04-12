@@ -49,13 +49,13 @@ export function Sidebar({
   const handleTabClick = (tab: string) => {
     setActiveTab(tab);
     setSelectedSubjectId(null);
-    if (window.innerWidth < 1024 && !isOpen) setIsOpen(false);
+    if (window.innerWidth < 1024) setIsOpen(false);
   };
 
   const handleSubjectClick = (id: string) => {
     setSelectedSubjectId(id);
     setActiveTab('tasks');
-    if (window.innerWidth < 1024 && !isOpen) setIsOpen(false);
+    if (window.innerWidth < 1024) setIsOpen(false);
   };
 
   return (

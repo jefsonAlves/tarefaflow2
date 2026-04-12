@@ -13,15 +13,15 @@ export function BottomNavigation({ activeTab, setActiveTab, isAdmin }: { activeT
   }
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 bg-white border-t p-2 flex justify-around items-center pb-[max(0.5rem,env(safe-area-inset-bottom))] z-50 lg:hidden">
+    <div className="fixed bottom-0 left-0 right-0 bg-white/80 backdrop-blur-lg border-t border-slate-100 p-2 flex justify-around items-center pb-[max(0.5rem,env(safe-area-inset-bottom))] z-50 lg:hidden">
       {navItems.map((item) => (
         <button
           key={item.id}
           onClick={() => setActiveTab(item.id)}
-          className={`flex flex-col items-center p-2 rounded-lg ${activeTab === item.id ? 'text-blue-600' : 'text-gray-500'}`}
+          className={`flex flex-col items-center p-2 rounded-2xl transition-all active:scale-90 ${activeTab === item.id ? 'text-blue-600' : 'text-slate-400'}`}
         >
-          <item.icon size={24} />
-          <span className="text-[10px] mt-1">{item.label}</span>
+          <item.icon size={22} className={activeTab === item.id ? 'fill-blue-50' : ''} />
+          <span className={`text-[10px] mt-1 font-bold ${activeTab === item.id ? 'opacity-100' : 'opacity-60'}`}>{item.label}</span>
         </button>
       ))}
     </div>

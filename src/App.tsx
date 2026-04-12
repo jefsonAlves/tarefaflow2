@@ -1349,8 +1349,9 @@ export default function App() {
         onAddTerm={() => setShowTermModal(true)}
       />
 
-      <main className="flex-1 p-4 lg:p-8 overflow-x-hidden lg:pb-8">
-        {/* Header */}
+      <main className="flex-1 overflow-x-hidden lg:pb-8">
+        <div className="max-w-7xl mx-auto p-4 lg:p-8 w-full">
+          {/* Header */}
         {(isSyncing || isSyncingTasks) && (
           <motion.div 
             initial={{ opacity: 0, y: -20 }}
@@ -1381,16 +1382,16 @@ export default function App() {
             )}
           </motion.div>
         )}
-        <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+        <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
           <div className="flex items-center gap-4">
             <button 
               onClick={() => setIsSidebarOpen(true)}
-              className="lg:hidden p-2 bg-white rounded-xl shadow-sm text-slate-600"
+              className="lg:hidden p-2.5 bg-white rounded-2xl shadow-sm text-slate-600 border border-slate-100 active:scale-95 transition-transform"
             >
               <Menu className="w-6 h-6" />
             </button>
-            <div>
-              <h1 className="text-3xl font-black text-slate-900 tracking-tight">
+            <div className="min-w-0">
+              <h1 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight truncate">
                 {activeTab === 'tasks' ? (selectedSubjectId ? subjects.find(s => s.id === selectedSubjectId)?.name : 'Minhas Tarefas') :
                  activeTab === 'kanban' ? 'Quadro Kanban' :
                  activeTab === 'calendar' ? 'Calendário' :
@@ -1398,41 +1399,44 @@ export default function App() {
                  activeTab === 'notes' ? 'Minhas Notas' :
                  activeTab === 'settings' ? 'Configurações Acadêmicas' : 'Disciplinas'}
               </h1>
-              <p className="text-slate-500 font-medium">
+              <p className="text-slate-500 font-medium text-sm md:text-base">
                 {new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })}
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 md:gap-3">
             <button 
               onClick={() => syncGoogleTasks()}
               disabled={isSyncingTasks}
               className={cn(
-                "flex items-center gap-2 px-5 py-3 bg-white border-2 border-slate-100 rounded-2xl font-bold text-slate-700 hover:border-blue-500 hover:text-blue-600 transition-all shadow-sm",
+                "flex items-center gap-2 px-4 md:px-5 py-2.5 md:py-3 bg-white border-2 border-slate-100 rounded-2xl font-bold text-slate-700 hover:border-blue-500 hover:text-blue-600 transition-all shadow-sm active:scale-95",
                 isSyncingTasks && "opacity-50 cursor-not-allowed"
               )}
+              title="Sincronizar Agenda"
             >
               <Calendar className={cn("w-5 h-5", isSyncingTasks && "animate-spin")} />
-              {isSyncingTasks ? 'Sincronizando...' : 'Agenda'}
+              <span className="hidden sm:inline">{isSyncingTasks ? 'Sincronizando...' : 'Agenda'}</span>
             </button>
             <button 
               onClick={() => syncClassroom()}
               disabled={isSyncing}
               className={cn(
-                "flex items-center gap-2 px-5 py-3 bg-white border-2 border-slate-100 rounded-2xl font-bold text-slate-700 hover:border-blue-500 hover:text-blue-600 transition-all shadow-sm",
+                "flex items-center gap-2 px-4 md:px-5 py-2.5 md:py-3 bg-white border-2 border-slate-100 rounded-2xl font-bold text-slate-700 hover:border-blue-500 hover:text-blue-600 transition-all shadow-sm active:scale-95",
                 isSyncing && "opacity-50 cursor-not-allowed"
               )}
+              title="Sincronizar Classroom"
             >
               <RefreshCw className={cn("w-5 h-5", isSyncing && "animate-spin")} />
-              {isSyncing ? 'Sincronizando...' : 'Classroom'}
+              <span className="hidden sm:inline">{isSyncing ? 'Sincronizando...' : 'Classroom'}</span>
             </button>
             <button 
               onClick={() => setShowCreateModal(true)}
-              className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-2xl font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-200"
+              className="flex items-center gap-2 px-4 md:px-6 py-2.5 md:py-3 bg-blue-600 text-white rounded-2xl font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 active:scale-95"
             >
               <Plus className="w-5 h-5" />
-              Nova Tarefa
+              <span className="hidden sm:inline">Nova Tarefa</span>
+              <span className="sm:hidden">Nova</span>
             </button>
           </div>
         </header>
@@ -1605,6 +1609,7 @@ export default function App() {
         </AnimatePresence>
         {/* Spacer for mobile bottom navigation */}
         <div className="h-32 lg:hidden w-full"></div>
+        </div>
       </main>
       <BottomNavigation 
         activeTab={activeTab} 
@@ -1800,26 +1805,26 @@ function CalendarView({ tasks }: { tasks: Task[] }) {
 
   return (
     <div className="flex flex-col lg:flex-row gap-6">
-      <div className="flex-1 bg-white rounded-[32px] shadow-xl p-8 space-y-6">
+      <div className="flex-1 bg-white rounded-[32px] shadow-xl p-4 md:p-8 space-y-6">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-2xl font-bold text-slate-900">{months[currentDate.getMonth()]} {currentDate.getFullYear()}</h2>
+          <h2 className="text-xl md:text-2xl font-bold text-slate-900">{months[currentDate.getMonth()]} {currentDate.getFullYear()}</h2>
           <div className="flex gap-2">
             <button onClick={prevMonth} className="p-2 hover:bg-slate-100 rounded-full transition-colors">
-              <ChevronRight className="w-6 h-6 rotate-180 text-slate-400" />
+              <ChevronRight className="w-5 h-5 md:w-6 md:h-6 rotate-180 text-slate-400" />
             </button>
             <button onClick={nextMonth} className="p-2 hover:bg-slate-100 rounded-full transition-colors">
-              <ChevronRight className="w-6 h-6 text-slate-400" />
+              <ChevronRight className="w-5 h-5 md:w-6 md:h-6 text-slate-400" />
             </button>
           </div>
         </div>
 
-        <div className="grid grid-cols-7 gap-2">
-          {["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"].map(day => (
-            <div key={day} className="text-center text-xs font-bold text-slate-400 uppercase py-2">{day}</div>
+        <div className="grid grid-cols-7 gap-1 md:gap-2">
+          {["D", "S", "T", "Q", "Q", "S", "S"].map(day => (
+            <div key={day} className="text-center text-[10px] md:text-xs font-bold text-slate-400 uppercase py-2">{day}</div>
           ))}
           
           {Array.from({ length: firstDayOfMonth }).map((_, i) => (
-            <div key={`empty-${i}`} className="h-24" />
+            <div key={`empty-${i}`} className="h-16 md:h-24" />
           ))}
           
           {Array.from({ length: daysInMonth }).map((_, i) => {
@@ -1844,20 +1849,20 @@ function CalendarView({ tasks }: { tasks: Task[] }) {
                 key={day} 
                 onClick={() => handleDayClick(day)}
                 className={cn(
-                  "h-24 border border-slate-50 rounded-2xl p-2 space-y-1 overflow-y-auto no-scrollbar cursor-pointer transition-all hover:scale-[1.02] hover:shadow-md", 
+                  "h-16 md:h-24 border border-slate-50 rounded-2xl p-1 md:p-2 space-y-1 overflow-y-auto no-scrollbar cursor-pointer transition-all hover:scale-[1.02] hover:shadow-md", 
                   isToday ? "bg-blue-50/50 border-blue-100 shadow-sm" : "bg-slate-50/30",
                   isOverdueHighlight && "border-red-300 bg-red-50/30 ring-2 ring-red-100"
                 )}
               >
                 <div className="flex items-center justify-between">
-                  <span className={cn("text-xs font-bold", isToday ? "text-blue-600" : "text-slate-400")}>{day}</span>
+                  <span className={cn("text-[10px] md:text-xs font-bold", isToday ? "text-blue-600" : "text-slate-400")}>{day}</span>
                   <div className="flex gap-0.5">
                     {pending.length > 0 && <span className="w-1 h-1 bg-blue-500 rounded-full" />}
                     {overdue.length > 0 && <span className="w-1 h-1 bg-red-500 rounded-full" />}
                     {completed.length > 0 && <span className="w-1 h-1 bg-green-500 rounded-full" />}
                   </div>
                 </div>
-                <div className="space-y-1">
+                <div className="space-y-1 hidden md:block">
                   {dayTasks.slice(0, 3).map(t => (
                     <div key={t.id} className={cn("text-[7px] p-0.5 rounded-sm truncate font-medium", t.completed ? "bg-green-100 text-green-700" : (new Date(t.dueDate) < new Date() ? "bg-red-100 text-red-700" : "bg-blue-100 text-blue-700"))}>
                       {t.title}
@@ -2237,7 +2242,7 @@ function TaskCard({ task, subjects, onToggle, onDelete, onMove }: { task: Task, 
       <div className="flex-1 min-w-0">
         <div className="flex items-center flex-wrap gap-2">
           {/* 1st: Subject (Category) */}
-          <span className="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full font-medium truncate max-w-[120px]">
+          <span className="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full font-medium truncate max-w-[80px] md:max-w-[120px]">
             {subjectName || 'Sem disciplina'}
           </span>
 
@@ -2247,12 +2252,12 @@ function TaskCard({ task, subjects, onToggle, onDelete, onMove }: { task: Task, 
               "text-[10px] px-2 py-0.5 rounded-full font-bold uppercase",
               task.role === 'teacher' ? "bg-purple-100 text-purple-700" : "bg-blue-100 text-blue-700"
             )}>
-              {task.role === 'teacher' ? 'Professor' : 'Aluno'}
+              {task.role === 'teacher' ? 'Prof' : 'Aluno'}
             </span>
           )}
 
           {/* 2nd: Activity of the subject (Task Title) */}
-          <h3 className={cn("font-semibold truncate max-w-[200px]", task.completed && "line-through text-slate-400")}>
+          <h3 className={cn("font-semibold truncate max-w-[120px] md:max-w-[300px]", task.completed && "line-through text-slate-400")}>
             {task.title.replace(/^\[(ALUNO|PROF)\]\s*/i, '')}
           </h3>
           
