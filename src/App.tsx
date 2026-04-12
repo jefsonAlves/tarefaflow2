@@ -1361,6 +1361,17 @@ export default function App() {
 
           <div className="flex items-center gap-3">
             <button 
+              onClick={() => syncGoogleTasks()}
+              disabled={isSyncingTasks}
+              className={cn(
+                "flex items-center gap-2 px-5 py-3 bg-white border-2 border-slate-100 rounded-2xl font-bold text-slate-700 hover:border-blue-500 hover:text-blue-600 transition-all shadow-sm",
+                isSyncingTasks && "opacity-50 cursor-not-allowed"
+              )}
+            >
+              <Calendar className={cn("w-5 h-5", isSyncingTasks && "animate-spin")} />
+              {isSyncingTasks ? 'Sincronizando...' : 'Agenda'}
+            </button>
+            <button 
               onClick={() => syncClassroom()}
               disabled={isSyncing}
               className={cn(
@@ -1689,7 +1700,15 @@ export default function App() {
               setShowSubjectModal(true);
             }}
             onTaskCreated={(task) => {
-              if (accessToken) syncGoogleCalendar(task);
+              if (accessToken) {
+                syncGoogleCalendar(task);
+                // Also sync to Google Tasks if it's a general task
+                fetch('/api/google/tasks/sync', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ accessToken, task })
+                }).catch(err => console.error("Error syncing to Google Tasks:", err));
+              }
             }}
           />
         )}
