@@ -20,7 +20,12 @@ import {
   Filter,
   ChevronRight,
   MoreVertical,
-  Menu
+  Menu,
+  ExternalLink,
+  X,
+  CheckSquare,
+  BookOpen,
+  StickyNote
 } from 'lucide-react';
 import { cn, formatDate } from './lib/utils';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
@@ -142,7 +147,6 @@ import { SettingsView } from './components/SettingsView';
 import { BottomNavigation } from './components/BottomNavigation';
 import { EnvironmentSwitcher } from './components/EnvironmentSwitcher';
 import { AdminPanel } from './components/AdminPanel';
-import { CheckSquare, BookOpen, StickyNote, X } from 'lucide-react';
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -419,7 +423,11 @@ export default function App() {
     return () => clearInterval(interval);
   }, [tasks, user]);
 
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+
   const handleSignIn = async () => {
+    if (isLoggingIn) return;
+    setIsLoggingIn(true);
     try {
       const result = await signIn();
       if (result && result.accessToken) {
@@ -439,18 +447,19 @@ export default function App() {
       
       let errorMsg = e.message || 'Erro desconhecido';
       if (e.code === 'auth/popup-blocked') {
-        errorMsg = 'O pop-up de login foi bloqueado pelo seu navegador. Por favor, permita pop-ups para este site.';
+        errorMsg = 'O pop-up de login foi bloqueado. Por favor, clique no ícone de bloqueio na barra de endereços do seu navegador e permita pop-ups para este site.';
       } else if (e.code === 'auth/popup-closed-by-user') {
-        errorMsg = 'O login foi cancelado. Por favor, tente novamente e complete o processo no pop-up.';
+        errorMsg = 'O login foi cancelado. Você precisa completar o processo na janela que se abre.';
       } else if (e.message?.includes('User not authorized') || e.code === 'auth/operation-not-allowed') {
-        errorMsg = 'Este e-mail não está autorizado ou o método de login não está configurado. Verifique se o e-mail foi adicionado como "Usuário de Teste" no Google Cloud Console se o app estiver em modo de teste.';
+        errorMsg = 'Acesso negado. Verifique se seu e-mail está na lista de usuários autorizados no Google Cloud Console.';
       } else if (e.code === 'auth/internal-error') {
-        errorMsg = 'Erro interno do Firebase. Verifique sua conexão ou tente novamente mais tarde.';
+        errorMsg = 'Erro interno. Tente abrir o aplicativo em uma nova aba do navegador.';
       }
       
       setAuthErrorMessage(errorMsg);
       setShowAuthModal(true);
-      console.error("Login error:", e);
+    } finally {
+      setIsLoggingIn(false);
     }
   };
 
@@ -876,11 +885,27 @@ export default function App() {
           </div>
           <button
             onClick={handleSignIn}
-            className="w-full py-4 bg-slate-900 text-white rounded-2xl font-semibold hover:bg-slate-800 transition-all flex items-center justify-center gap-3 active:scale-95"
+            disabled={isLoggingIn}
+            className="w-full py-4 bg-slate-900 text-white rounded-2xl font-semibold hover:bg-slate-800 transition-all flex items-center justify-center gap-3 active:scale-95 disabled:opacity-70"
           >
-            <img src="https://www.google.com/favicon.ico" className="w-5 h-5" alt="Google" />
-            Entrar com Google
+            {isLoggingIn ? (
+              <RefreshCw className="w-5 h-5 animate-spin" />
+            ) : (
+              <img src="https://www.google.com/favicon.ico" className="w-5 h-5" alt="Google" />
+            )}
+            {isLoggingIn ? 'Iniciando login...' : 'Entrar com Google'}
           </button>
+          
+          <div className="pt-4 border-t border-slate-100">
+            <p className="text-sm text-slate-500 mb-2">Problemas no login?</p>
+            <button 
+              onClick={() => window.open(window.location.href, '_blank')}
+              className="text-blue-600 text-sm font-bold hover:underline flex items-center justify-center gap-1 mx-auto"
+            >
+              Abrir em nova aba <ExternalLink className="w-4 h-4" />
+            </button>
+          </div>
+
           <p className="text-xs text-slate-400">Ao entrar, você concorda com nossos termos de uso.</p>
         </div>
       </div>
