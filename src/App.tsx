@@ -927,6 +927,12 @@ export default function App() {
   }
 
   if (!user) {
+    const userAgent = navigator.userAgent || navigator.vendor || (window as any).opera;
+    const isIOSWebView = /(iPhone|iPod|iPad).*AppleWebKit(?!.*Safari)/i.test(userAgent);
+    const isAndroidWebView = userAgent.includes('wv') || (userAgent.includes('Android') && userAgent.includes('Version/'));
+    const isSocialApp = userAgent.includes('Instagram') || userAgent.includes('FBAN') || userAgent.includes('FBAV');
+    const isWebView = isIOSWebView || isAndroidWebView || isSocialApp;
+
     return (
       <div className="min-h-[100dvh] bg-slate-50 flex flex-col items-center justify-center p-4">
         <div className="max-w-md w-full bg-white rounded-3xl shadow-xl p-8 text-center space-y-6">
@@ -937,18 +943,38 @@ export default function App() {
             <h1 className="text-3xl font-bold text-slate-900 tracking-tight">SmartPlan Pro</h1>
             <p className="text-slate-500">Organize sua vida acadêmica e pessoal com inteligência e confiabilidade.</p>
           </div>
-          <button
-            onClick={handleSignIn}
-            disabled={isLoggingIn}
-            className="w-full py-4 bg-slate-900 text-white rounded-2xl font-semibold hover:bg-slate-800 transition-all flex items-center justify-center gap-3 active:scale-95 disabled:opacity-70"
-          >
-            {isLoggingIn ? (
-              <RefreshCw className="w-5 h-5 animate-spin" />
-            ) : (
-              <img src="https://www.google.com/favicon.ico" className="w-5 h-5" alt="Google" />
-            )}
-            {isLoggingIn ? 'Iniciando login...' : 'Entrar com Google'}
-          </button>
+          
+          {isWebView ? (
+            <div className="p-4 bg-amber-50 text-amber-800 rounded-2xl border border-amber-200 text-sm text-left space-y-3">
+              <div className="flex items-start gap-2">
+                <AlertCircle className="w-5 h-5 shrink-0 text-amber-600 mt-0.5" />
+                <p className="font-semibold">Navegador incompatível detectado</p>
+              </div>
+              <p>
+                Você está usando um navegador interno que bloqueia o login seguro do Google. 
+                Para acessar o aplicativo, por favor abra no seu navegador padrão (Chrome, Safari, etc).
+              </p>
+              <button 
+                onClick={() => window.open(window.location.href, '_system')}
+                className="w-full py-3 bg-amber-600 text-white rounded-xl font-bold hover:bg-amber-700 transition-all flex items-center justify-center gap-2 mt-2"
+              >
+                Abrir no Navegador Padrão <ExternalLink className="w-4 h-4" />
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={handleSignIn}
+              disabled={isLoggingIn}
+              className="w-full py-4 bg-slate-900 text-white rounded-2xl font-semibold hover:bg-slate-800 transition-all flex items-center justify-center gap-3 active:scale-95 disabled:opacity-70"
+            >
+              {isLoggingIn ? (
+                <RefreshCw className="w-5 h-5 animate-spin" />
+              ) : (
+                <img src="https://www.google.com/favicon.ico" className="w-5 h-5" alt="Google" />
+              )}
+              {isLoggingIn ? 'Iniciando login...' : 'Entrar com Google'}
+            </button>
+          )}
 
           {authErrorMessage && (
             <div className="p-3 bg-red-50 text-red-600 rounded-xl text-xs border border-red-100 flex items-start gap-2 text-left">
@@ -957,20 +983,22 @@ export default function App() {
             </div>
           )}
           
-          <div className="pt-4 border-t border-slate-100">
-            <p className="text-sm text-slate-500 mb-2">Problemas no login?</p>
-            <div className="space-y-3">
-              <button 
-                onClick={() => window.open(window.location.href, '_blank')}
-                className="w-full py-3 border-2 border-blue-100 text-blue-600 rounded-2xl text-sm font-bold hover:bg-blue-50 transition-all flex items-center justify-center gap-2"
-              >
-                Abrir em nova aba <ExternalLink className="w-4 h-4" />
-              </button>
-              <p className="text-[10px] text-slate-400">
-                Dica: Em dispositivos móveis, o login pode ser bloqueado pelo navegador. Abrir em uma nova aba resolve a maioria dos problemas.
-              </p>
+          {!isWebView && (
+            <div className="pt-4 border-t border-slate-100">
+              <p className="text-sm text-slate-500 mb-2">Problemas no login?</p>
+              <div className="space-y-3">
+                <button 
+                  onClick={() => window.open(window.location.href, '_blank')}
+                  className="w-full py-3 border-2 border-blue-100 text-blue-600 rounded-2xl text-sm font-bold hover:bg-blue-50 transition-all flex items-center justify-center gap-2"
+                >
+                  Abrir em nova aba <ExternalLink className="w-4 h-4" />
+                </button>
+                <p className="text-[10px] text-slate-400">
+                  Dica: Em dispositivos móveis, o login pode ser bloqueado pelo navegador. Abrir em uma nova aba resolve a maioria dos problemas.
+                </p>
+              </div>
             </div>
-          </div>
+          )}
 
           <p className="text-xs text-slate-400">Ao entrar, você concorda com nossos termos de uso.</p>
         </div>
