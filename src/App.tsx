@@ -198,6 +198,7 @@ export default function App() {
   const [statusFilter, setStatusFilter] = useState<'all' | 'todo' | 'in-progress' | 'done'>('all');
   const [isSyncing, setIsSyncing] = useState(false);
   const [isSyncingTasks, setIsSyncingTasks] = useState(false);
+  const [syncProgress, setSyncProgress] = useState({ current: 0, total: 0, message: '' });
   const [isSyncingCalendar, setIsSyncingCalendar] = useState(false);
   const [activeTab, setActiveTab] = useState<string>(() => localStorage.getItem('active_tab') || 'tasks');
   const [roleFilter, setRoleFilter] = useState<'all' | 'student' | 'teacher'>('all');
@@ -966,8 +967,10 @@ export default function App() {
       return;
     }
     setIsSyncingTasks(true);
+    setSyncProgress({ current: 0, total: 0, message: 'Iniciando sincronização com Google Agenda...' });
     try {
       // 1. Fetch from Google
+      setSyncProgress(prev => ({ ...prev, message: 'Buscando tarefas do Google...' }));
       const res = await fetch('/api/google/tasks/list', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -981,8 +984,13 @@ export default function App() {
       
       if (!Array.isArray(googleTasks)) throw new Error("Invalid response from Google Tasks");
 
+      setSyncProgress({ current: 0, total: googleTasks.length, message: 'Sincronizando tarefas...' });
+
       // 2. Bidirectional Sync with Conflict Resolution (Local Priority)
+      let count = 0;
       for (const gTask of googleTasks) {
+        count++;
+        setSyncProgress(prev => ({ ...prev, current: count, message: `Sincronizando: ${gTask.title || 'Sem Título'}` }));
         const localTask = tasks.find(t => t.externalId === gTask.id);
         
         if (!localTask) {
@@ -1089,12 +1097,14 @@ export default function App() {
     }
 
     setIsSyncing(true);
+    setSyncProgress({ current: 0, total: 0, message: 'Iniciando sincronização com Google Classroom...' });
     try {
       // Mark policies as accepted
       localStorage.setItem(`accepted_policies_${user.uid}`, 'true');
       setShowOnboarding(false);
 
       // 1. Fetch Courses (Incremental check)
+      setSyncProgress(prev => ({ ...prev, message: 'Buscando suas turmas...' }));
       const lastSync = localStorage.getItem(`last_sync_${user.uid}`) || new Date(0).toISOString();
       
       const coursesRes = await fetch('/api/google/classroom/courses', {
@@ -1112,12 +1122,17 @@ export default function App() {
 
       if (!Array.isArray(courses)) throw new Error("Invalid response from Classroom API");
 
+      setSyncProgress({ current: 0, total: courses.length, message: 'Processando turmas...' });
+
       let totalImported = 0;
       let totalUpdated = 0;
       const newlyImported: Task[] = [];
 
       // 2. Fetch Coursework for each course
+      let courseCount = 0;
       for (const course of courses) {
+        courseCount++;
+        setSyncProgress(prev => ({ ...prev, current: courseCount, message: `Sincronizando turma: ${course.name}` }));
         try {
           // Determine role
           const role = course.role || 'student';
@@ -1336,6 +1351,36 @@ export default function App() {
 
       <main className="flex-1 p-4 lg:p-8 overflow-x-hidden lg:pb-8">
         {/* Header */}
+        {(isSyncing || isSyncingTasks) && (
+          <motion.div 
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="mb-6 bg-blue-600 text-white p-4 rounded-2xl shadow-lg shadow-blue-200"
+          >
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-3">
+                <RefreshCw className="w-5 h-5 animate-spin" />
+                <span className="font-bold text-sm">{syncProgress.message}</span>
+              </div>
+              {syncProgress.total > 0 && (
+                <span className="text-xs font-bold bg-blue-500 px-2 py-1 rounded-lg">
+                  {syncProgress.current} / {syncProgress.total}
+                </span>
+              )}
+            </div>
+            {syncProgress.total > 0 && (
+              <div className="w-full bg-blue-400/30 h-1.5 rounded-full overflow-hidden">
+                <motion.div 
+                  className="bg-white h-full"
+                  initial={{ width: 0 }}
+                  animate={{ width: `${(syncProgress.current / syncProgress.total) * 100}%` }}
+                  transition={{ duration: 0.3 }}
+                />
+              </div>
+            )}
+          </motion.div>
+        )}
         <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
           <div className="flex items-center gap-4">
             <button 
