@@ -1809,7 +1809,7 @@ export default function App() {
                 <GraduationCap className="w-10 h-10 text-blue-600" />
               </div>
               <div className="space-y-2">
-                <h2 className="text-2xl font-bold text-slate-900">Bem-vindo ao SmartPlan!</h2>
+                <h2 className="text-2xl font-bold text-slate-900">Bem-vindo ao Agende Tarefas!</h2>
                 <p className="text-slate-500 text-sm leading-relaxed">
                   Para começar a organizar sua vida acadêmica, precisamos sincronizar seus dados do <strong>Google Classroom</strong>.
                 </p>
