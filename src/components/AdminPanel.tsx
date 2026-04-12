@@ -95,7 +95,26 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       </div>
 
       <div className="p-6">
-        {activeTab === 'dashboard' && <div className="text-gray-500">Dashboard em desenvolvimento.</div>}
+        {activeTab === 'dashboard' && (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="bg-blue-50 p-6 rounded-2xl border border-blue-100">
+              <p className="text-sm font-bold text-blue-600 uppercase tracking-wider mb-1">Total Usuários</p>
+              <p className="text-3xl font-black text-blue-900">{users.length}</p>
+            </div>
+            <div className="bg-green-50 p-6 rounded-2xl border border-green-100">
+              <p className="text-sm font-bold text-green-600 uppercase tracking-wider mb-1">Ativos</p>
+              <p className="text-3xl font-black text-green-900">{users.filter(u => u.subscriptionStatus === 'active').length}</p>
+            </div>
+            <div className="bg-amber-50 p-6 rounded-2xl border border-amber-100">
+              <p className="text-sm font-bold text-amber-600 uppercase tracking-wider mb-1">Pendentes</p>
+              <p className="text-3xl font-black text-amber-900">{paymentRequests.filter(r => r.status === 'pending').length}</p>
+            </div>
+            <div className="bg-purple-50 p-6 rounded-2xl border border-purple-100">
+              <p className="text-sm font-bold text-purple-600 uppercase tracking-wider mb-1">Receita Est.</p>
+              <p className="text-3xl font-black text-purple-900">R$ {(users.filter(u => u.subscriptionStatus === 'active').length * 29.9).toFixed(2)}</p>
+            </div>
+          </div>
+        )}
         {activeTab === 'users' && (
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
@@ -187,8 +206,79 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             )}
           </div>
         )}
-        {activeTab === 'plans' && <div className="text-gray-500">Configurações de Plano em desenvolvimento.</div>}
-        {activeTab === 'features' && <div className="text-gray-500">Controles de Recursos em desenvolvimento.</div>}
+        {activeTab === 'plans' && (
+          <div className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                <h3 className="font-bold text-slate-800 mb-4">Plano Mensal</h3>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Preço (R$)</label>
+                    <input type="number" defaultValue="29.90" className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:border-blue-500 outline-none" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Descrição</label>
+                    <textarea defaultValue="Acesso total mensal com todas as integrações." className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:border-blue-500 outline-none resize-none" rows={3} />
+                  </div>
+                </div>
+              </div>
+              <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                <h3 className="font-bold text-slate-800 mb-4">Plano Anual</h3>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Preço (R$)</label>
+                    <input type="number" defaultValue="299.90" className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:border-blue-500 outline-none" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Descrição</label>
+                    <textarea defaultValue="Economize 2 meses com o plano anual." className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:border-blue-500 outline-none resize-none" rows={3} />
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="flex justify-end">
+              <button className="px-8 py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-100">
+                Salvar Alterações
+              </button>
+            </div>
+          </div>
+        )}
+        {activeTab === 'features' && (
+          <div className="space-y-6">
+            <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200">
+              <h3 className="font-bold text-slate-800 mb-4">Controle de Recursos Globais</h3>
+              <div className="space-y-4">
+                <div className="flex items-center justify-between p-4 bg-white rounded-xl border border-slate-100">
+                  <div>
+                    <p className="font-bold text-slate-700">Sincronização Classroom</p>
+                    <p className="text-xs text-slate-500">Habilitar/Desabilitar integração para todos os usuários</p>
+                  </div>
+                  <div className="w-12 h-6 bg-green-500 rounded-full relative cursor-pointer">
+                    <div className="absolute right-1 top-1 w-4 h-4 bg-white rounded-full shadow-sm" />
+                  </div>
+                </div>
+                <div className="flex items-center justify-between p-4 bg-white rounded-xl border border-slate-100">
+                  <div>
+                    <p className="font-bold text-slate-700">Inteligência Artificial (Gemini)</p>
+                    <p className="text-xs text-slate-500">Controle de uso de créditos de IA</p>
+                  </div>
+                  <div className="w-12 h-6 bg-green-500 rounded-full relative cursor-pointer">
+                    <div className="absolute right-1 top-1 w-4 h-4 bg-white rounded-full shadow-sm" />
+                  </div>
+                </div>
+                <div className="flex items-center justify-between p-4 bg-white rounded-xl border border-slate-100">
+                  <div>
+                    <p className="font-bold text-slate-700">Notificações Push</p>
+                    <p className="text-xs text-slate-500">Serviço de alertas em tempo real</p>
+                  </div>
+                  <div className="w-12 h-6 bg-slate-300 rounded-full relative cursor-pointer">
+                    <div className="absolute left-1 top-1 w-4 h-4 bg-white rounded-full shadow-sm" />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

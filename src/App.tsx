@@ -421,7 +421,14 @@ export default function App() {
 
   const handleSignIn = async () => {
     try {
-      await signIn();
+      const result = await signIn();
+      if (result && result.accessToken) {
+        setAccessToken(result.accessToken);
+        sessionStorage.setItem('google_access_token', result.accessToken);
+        if ('Notification' in window && Notification.permission === 'default') {
+          Notification.requestPermission();
+        }
+      }
     } catch (e: any) {
       console.error("Sign-in error details:", {
         code: e.code,
@@ -429,7 +436,21 @@ export default function App() {
         customData: e.customData,
         name: e.name
       });
-      alert(`Erro ao iniciar login: ${e.message || 'Erro desconhecido'}`);
+      
+      let errorMsg = e.message || 'Erro desconhecido';
+      if (e.code === 'auth/popup-blocked') {
+        errorMsg = 'O pop-up de login foi bloqueado pelo seu navegador. Por favor, permita pop-ups para este site.';
+      } else if (e.code === 'auth/popup-closed-by-user') {
+        errorMsg = 'O login foi cancelado. Por favor, tente novamente e complete o processo no pop-up.';
+      } else if (e.message?.includes('User not authorized') || e.code === 'auth/operation-not-allowed') {
+        errorMsg = 'Este e-mail não está autorizado ou o método de login não está configurado. Verifique se o e-mail foi adicionado como "Usuário de Teste" no Google Cloud Console se o app estiver em modo de teste.';
+      } else if (e.code === 'auth/internal-error') {
+        errorMsg = 'Erro interno do Firebase. Verifique sua conexão ou tente novamente mais tarde.';
+      }
+      
+      setAuthErrorMessage(errorMsg);
+      setShowAuthModal(true);
+      console.error("Login error:", e);
     }
   };
 
@@ -1288,7 +1309,7 @@ export default function App() {
         onAddTerm={() => setShowTermModal(true)}
       />
 
-      <main className="flex-1 p-4 lg:p-8 overflow-x-hidden">
+      <main className="flex-1 p-4 lg:p-8 overflow-x-hidden pb-40 lg:pb-8">
         {/* Header */}
         <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
           <div className="flex items-center gap-4">
@@ -1507,7 +1528,7 @@ export default function App() {
         setActiveTab={setActiveTab} 
         isAdmin={userProfile?.role_user === 'admin'} 
       />
-      </div>
+    </div>
 
       {/* Onboarding Tour Overlay */}
       <AnimatePresence>
@@ -1646,20 +1667,6 @@ export default function App() {
           />
         )}
       </AnimatePresence>
-
-      {/* Mobile Nav */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-100 px-6 py-4 flex items-center justify-around sm:hidden">
-        <button className="p-2 text-blue-600"><Clock className="w-6 h-6" /></button>
-        <button className="p-2 text-slate-400"><Calendar className="w-6 h-6" /></button>
-        <button 
-          onClick={() => setShowCreateModal(true)}
-          className="w-14 h-14 bg-blue-600 rounded-full flex items-center justify-center -mt-10 shadow-lg shadow-blue-200 text-white"
-        >
-          <Plus className="w-8 h-8" />
-        </button>
-        <button className="p-2 text-slate-400"><GraduationCap className="w-6 h-6" /></button>
-        <button className="p-2 text-slate-400"><Settings className="w-6 h-6" /></button>
-      </nav>
     </>
   );
 }
