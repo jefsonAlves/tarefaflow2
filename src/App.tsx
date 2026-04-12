@@ -151,8 +151,16 @@ import { AdminPanel } from './components/AdminPanel';
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
-  const [accessToken, setAccessToken] = useState<string | null>(sessionStorage.getItem('google_access_token'));
+  const [accessToken, setAccessToken] = useState<string | null>(() => {
+    try {
+      return sessionStorage.getItem('google_access_token');
+    } catch (e) {
+      console.warn("Session storage access failed:", e);
+      return null;
+    }
+  });
   const [loading, setLoading] = useState(true);
+  const [initializationError, setInitializationError] = useState<string | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [userRole, setUserRole] = useState<'student' | 'teacher'>('student');
   
@@ -200,7 +208,13 @@ export default function App() {
   const [isSyncingTasks, setIsSyncingTasks] = useState(false);
   const [syncProgress, setSyncProgress] = useState({ current: 0, total: 0, message: '' });
   const [isSyncingCalendar, setIsSyncingCalendar] = useState(false);
-  const [activeTab, setActiveTab] = useState<string>(() => localStorage.getItem('active_tab') || 'tasks');
+  const [activeTab, setActiveTab] = useState<string>(() => {
+    try {
+      return localStorage.getItem('active_tab') || 'tasks';
+    } catch (e) {
+      return 'tasks';
+    }
+  });
   const [roleFilter, setRoleFilter] = useState<'all' | 'student' | 'teacher'>('all');
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [showDiagnostics, setShowDiagnostics] = useState(false);
@@ -212,7 +226,11 @@ export default function App() {
   const [paymentRequests, setPaymentRequests] = useState<any[]>([]);
 
   useEffect(() => {
-    localStorage.setItem('active_tab', activeTab);
+    try {
+      localStorage.setItem('active_tab', activeTab);
+    } catch (e) {
+      console.warn("Local storage write failed:", e);
+    }
   }, [activeTab]);
   const [diagnosticStatus, setDiagnosticStatus] = useState({
     notifications: 'checking',
@@ -274,6 +292,14 @@ export default function App() {
   }, [user]);
 
   useEffect(() => {
+    // Safety timeout to ensure app eventually loads
+    const timeoutId = setTimeout(() => {
+      if (loading) {
+        console.warn("Auth initialization timed out, forcing loading to false");
+        setLoading(false);
+      }
+    }, 8000);
+
     const unsubscribe = onAuthStateChanged(auth, async (u) => {
       setUser(u);
       
@@ -299,31 +325,38 @@ export default function App() {
           } else {
             setUserProfile(userDocSnap.data() as UserProfile);
           }
-        } catch (error) {
+        } catch (error: any) {
           console.error("Error fetching/creating user profile:", error);
+          setInitializationError("Erro ao carregar perfil: " + error.message);
         }
       } else {
         setUserProfile(null);
       }
       
       setLoading(false);
+      clearTimeout(timeoutId);
     });
     
     // Check for redirect result
     handleRedirectResult().then((result) => {
       if (result && result.accessToken) {
         setAccessToken(result.accessToken);
-        sessionStorage.setItem('google_access_token', result.accessToken);
+        try {
+          sessionStorage.setItem('google_access_token', result.accessToken);
+        } catch (e) {}
         if ('Notification' in window && Notification.permission === 'default') {
           Notification.requestPermission();
         }
       }
     }).catch((e: any) => {
       console.error("Redirect sign-in error details:", e);
-      alert(`Erro ao fazer login: ${e.message || 'Erro desconhecido'}`);
+      setAuthErrorMessage(`Erro ao fazer login: ${e.message || 'Erro desconhecido'}`);
     });
 
-    return unsubscribe;
+    return () => {
+      unsubscribe();
+      clearTimeout(timeoutId);
+    };
   }, []);
 
   // Admin Data Fetching
@@ -431,11 +464,18 @@ export default function App() {
     setIsLoggingIn(true);
     try {
       const result = await signIn();
-      if (result && result.accessToken) {
-        setAccessToken(result.accessToken);
-        sessionStorage.setItem('google_access_token', result.accessToken);
-        if ('Notification' in window && Notification.permission === 'default') {
-          Notification.requestPermission();
+      if (result && result.user) {
+        setUser(result.user);
+        if (result.accessToken) {
+          setAccessToken(result.accessToken);
+          try {
+            sessionStorage.setItem('google_access_token', result.accessToken);
+          } catch (e) {
+            console.warn("Could not save access token to session storage:", e);
+          }
+          if ('Notification' in window && Notification.permission === 'default') {
+            Notification.requestPermission();
+          }
         }
       }
     } catch (e: any) {
@@ -446,17 +486,14 @@ export default function App() {
         name: e.name
       });
       
-      let errorMsg = e.message || 'Erro desconhecido';
+      let errorMsg = "Erro ao fazer login. Tente novamente.";
       if (e.code === 'auth/popup-blocked') {
-        errorMsg = 'O pop-up de login foi bloqueado. Por favor, clique no ícone de bloqueio na barra de endereços do seu navegador e permita pop-ups para este site.';
-      } else if (e.code === 'auth/popup-closed-by-user') {
-        errorMsg = 'O login foi cancelado. Você precisa completar o processo na janela que se abre.';
-      } else if (e.message?.includes('User not authorized') || e.code === 'auth/operation-not-allowed') {
-        errorMsg = 'Acesso negado. Verifique se seu e-mail está na lista de usuários autorizados no Google Cloud Console.';
-      } else if (e.code === 'auth/internal-error') {
-        errorMsg = 'Erro interno. Tente abrir o aplicativo em uma nova aba do navegador.';
+        errorMsg = "O popup de login foi bloqueado. Por favor, permita popups ou use o botão 'Abrir em nova aba'.";
+      } else if (e.code === 'auth/cancelled-popup-request' || e.code === 'auth/popup-closed-by-user') {
+        errorMsg = "Login cancelado.";
+      } else {
+        errorMsg = "Erro: " + (e.message || "Erro desconhecido");
       }
-      
       setAuthErrorMessage(errorMsg);
       setShowAuthModal(true);
     } finally {
@@ -862,13 +899,29 @@ export default function App() {
 
   if (loading) {
     return (
-      <div className="min-h-[100dvh] bg-slate-50 flex items-center justify-center">
+      <div className="min-h-[100dvh] bg-slate-50 flex flex-col items-center justify-center p-6 text-center">
         <motion.div 
           animate={{ rotate: 360 }}
           transition={{ repeat: Infinity, duration: 1, ease: "linear" }}
+          className="mb-4"
         >
-          <RefreshCw className="w-8 h-8 text-blue-600" />
+          <RefreshCw className="w-10 h-10 text-blue-600" />
         </motion.div>
+        <h2 className="text-xl font-semibold text-slate-800">Iniciando SmartPlan Pro...</h2>
+        <p className="text-slate-500 mt-2 max-w-xs">Isso pode levar alguns segundos dependendo da sua conexão.</p>
+        
+        {initializationError && (
+          <div className="mt-6 p-4 bg-red-50 text-red-600 rounded-2xl text-sm border border-red-100 max-w-xs">
+            <AlertCircle className="w-5 h-5 mx-auto mb-2" />
+            {initializationError}
+            <button 
+              onClick={() => window.location.reload()}
+              className="mt-3 block w-full py-2 bg-red-600 text-white rounded-xl font-bold"
+            >
+              Tentar Novamente
+            </button>
+          </div>
+        )}
       </div>
     );
   }
@@ -896,15 +949,27 @@ export default function App() {
             )}
             {isLoggingIn ? 'Iniciando login...' : 'Entrar com Google'}
           </button>
+
+          {authErrorMessage && (
+            <div className="p-3 bg-red-50 text-red-600 rounded-xl text-xs border border-red-100 flex items-start gap-2 text-left">
+              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+              <span>{authErrorMessage}</span>
+            </div>
+          )}
           
           <div className="pt-4 border-t border-slate-100">
             <p className="text-sm text-slate-500 mb-2">Problemas no login?</p>
-            <button 
-              onClick={() => window.open(window.location.href, '_blank')}
-              className="text-blue-600 text-sm font-bold hover:underline flex items-center justify-center gap-1 mx-auto"
-            >
-              Abrir em nova aba <ExternalLink className="w-4 h-4" />
-            </button>
+            <div className="space-y-3">
+              <button 
+                onClick={() => window.open(window.location.href, '_blank')}
+                className="w-full py-3 border-2 border-blue-100 text-blue-600 rounded-2xl text-sm font-bold hover:bg-blue-50 transition-all flex items-center justify-center gap-2"
+              >
+                Abrir em nova aba <ExternalLink className="w-4 h-4" />
+              </button>
+              <p className="text-[10px] text-slate-400">
+                Dica: Em dispositivos móveis, o login pode ser bloqueado pelo navegador. Abrir em uma nova aba resolve a maioria dos problemas.
+              </p>
+            </div>
           </div>
 
           <p className="text-xs text-slate-400">Ao entrar, você concorda com nossos termos de uso.</p>
@@ -1077,12 +1142,14 @@ export default function App() {
         const enableUrl = `https://console.developers.google.com/apis/api/tasks.googleapis.com/overview?project=${projectId}`;
         
         setDiagnosticStatus(prev => ({ ...prev, tasks: 'denied' }));
-        // alert(`A API do Google Tasks não está ativada no seu projeto Google Cloud.\n\nPor favor, acesse o link abaixo para ativar a API e tente novamente:\n\n${enableUrl}`);
+        setAuthErrorMessage(`A API do Google Tasks não está ativada. Ative em: ${enableUrl}`);
+        setShowAuthModal(true);
         return;
       }
 
       setDiagnosticStatus(prev => ({ ...prev, tasks: 'stable' }));
-      // alert(`Erro no Google Tasks: ${errorMessage}`);
+      setAuthErrorMessage(`Erro no Google Tasks: ${errorMessage}`);
+      setShowAuthModal(true);
     } finally {
       setIsSyncingTasks(false);
     }
@@ -1313,12 +1380,14 @@ export default function App() {
         const enableUrl = `https://console.developers.google.com/apis/api/classroom.googleapis.com/overview?project=${projectId}`;
         
         setDiagnosticStatus(prev => ({ ...prev, classroom: 'denied' }));
-        alert(`A API do Google Classroom não está ativada no seu projeto Google Cloud.\n\nPor favor, acesse o link abaixo para ativar a API e tente novamente:\n\n${enableUrl}`);
+        setAuthErrorMessage(`A API do Google Classroom não está ativada. Ative em: ${enableUrl}`);
+        setShowAuthModal(true);
         return;
       }
 
       setDiagnosticStatus(prev => ({ ...prev, classroom: 'stable' }));
-      alert(`Erro na sincronização: ${errorMessage}`);
+      setAuthErrorMessage(`Erro na sincronização: ${errorMessage}`);
+      setShowAuthModal(true);
       if (errorMessage.toLowerCase().includes("token") || 
           errorMessage.toLowerCase().includes("auth") || 
           errorMessage.toLowerCase().includes("credentials")) {
