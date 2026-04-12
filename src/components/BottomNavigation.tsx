@@ -13,7 +13,7 @@ export function BottomNavigation({ activeTab, setActiveTab, isAdmin }: { activeT
   }
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 bg-white border-t p-2 flex justify-around items-center pb-safe z-50 lg:hidden">
+    <div className="fixed bottom-0 left-0 right-0 bg-white border-t p-2 flex justify-around items-center pb-[max(0.5rem,env(safe-area-inset-bottom))] z-50 lg:hidden">
       {navItems.map((item) => (
         <button
           key={item.id}

@@ -78,7 +78,7 @@ export function Sidebar({
         initial={false}
         animate={{ width: isOpen ? 288 : 80 }}
         className={cn(
-          "fixed lg:sticky top-0 left-0 h-full lg:h-screen bg-white border-r border-slate-100 z-50 flex flex-col shadow-2xl lg:shadow-none transition-all duration-300 ease-in-out",
+          "fixed lg:sticky top-0 left-0 h-[100dvh] lg:h-[100dvh] bg-white border-r border-slate-100 z-50 flex flex-col shadow-2xl lg:shadow-none transition-all duration-300 ease-in-out",
           window.innerWidth < 1024 && !isOpen && "-translate-x-full lg:translate-x-0"
         )}
       >

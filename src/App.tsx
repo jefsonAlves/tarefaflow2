@@ -114,7 +114,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
         // Not a JSON error
       }
       return (
-        <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+        <div className="min-h-[100dvh] bg-slate-50 flex items-center justify-center p-4">
           <div className="bg-white p-8 rounded-3xl shadow-xl max-w-md w-full text-center space-y-4">
             <AlertCircle className="w-12 h-12 text-red-500 mx-auto" />
             <h2 className="text-xl font-bold text-slate-900">Ops! Algo deu errado</h2>
@@ -852,7 +852,7 @@ export default function App() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+      <div className="min-h-[100dvh] bg-slate-50 flex items-center justify-center">
         <motion.div 
           animate={{ rotate: 360 }}
           transition={{ repeat: Infinity, duration: 1, ease: "linear" }}
@@ -865,7 +865,7 @@ export default function App() {
 
   if (!user) {
     return (
-      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
+      <div className="min-h-[100dvh] bg-slate-50 flex flex-col items-center justify-center p-4">
         <div className="max-w-md w-full bg-white rounded-3xl shadow-xl p-8 text-center space-y-6">
           <div className="w-20 h-20 bg-blue-600 rounded-2xl flex items-center justify-center mx-auto shadow-lg shadow-blue-200">
             <CheckCircle2 className="w-12 h-12 text-white" />
@@ -1294,7 +1294,7 @@ export default function App() {
 
   return (
     <>
-      <div className="flex min-h-screen bg-slate-50">
+      <div className="flex min-h-[100dvh] bg-slate-50">
       <Sidebar 
         isOpen={isSidebarOpen}
         setIsOpen={setIsSidebarOpen}
@@ -1309,7 +1309,7 @@ export default function App() {
         onAddTerm={() => setShowTermModal(true)}
       />
 
-      <main className="flex-1 p-4 lg:p-8 overflow-x-hidden pb-40 lg:pb-8">
+      <main className="flex-1 p-4 lg:p-8 overflow-x-hidden lg:pb-8">
         {/* Header */}
         <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
           <div className="flex items-center gap-4">
@@ -1522,6 +1522,8 @@ export default function App() {
             )}
           </motion.div>
         </AnimatePresence>
+        {/* Spacer for mobile bottom navigation */}
+        <div className="h-32 lg:hidden w-full"></div>
       </main>
       <BottomNavigation 
         activeTab={activeTab} 
