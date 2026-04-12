@@ -954,7 +954,7 @@ export default function App() {
         >
           <RefreshCw className="w-10 h-10 text-blue-600" />
         </motion.div>
-        <h2 className="text-xl font-semibold text-slate-800">Iniciando SmartPlan Pro...</h2>
+        <h2 className="text-xl font-semibold text-slate-800">Iniciando Agende Tarefas...</h2>
         <p className="text-slate-500 mt-2 max-w-xs">Isso pode levar alguns segundos dependendo da sua conexão.</p>
         
         {initializationError && (
@@ -987,7 +987,7 @@ export default function App() {
             <CheckCircle2 className="w-12 h-12 text-white" />
           </div>
           <div className="space-y-2">
-            <h1 className="text-3xl font-bold text-slate-900 tracking-tight">SmartPlan Pro</h1>
+            <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Agende Tarefas</h1>
             <p className="text-slate-500">Organize sua vida acadêmica e pessoal com inteligência e confiabilidade.</p>
           </div>
           
@@ -1538,7 +1538,7 @@ export default function App() {
                 <Download className="w-6 h-6 text-white" />
               </div>
               <div>
-                <h3 className="font-bold">Instalar SmartPlan Pro</h3>
+                <h3 className="font-bold">Instalar Agende Tarefas</h3>
                 <p className="text-sm text-blue-100">Instale o aplicativo para acesso rápido e notificações.</p>
               </div>
             </div>

@@ -96,7 +96,7 @@ export function Sidebar({
                   <GraduationCap className="w-6 h-6" />
                 </div>
                 <div className="truncate">
-                  <h1 className="font-bold text-slate-800 leading-tight">StudyOS</h1>
+                  <h1 className="font-bold text-slate-800 leading-tight">Agende Tarefas</h1>
                   <p className="text-[10px] font-medium text-slate-400 uppercase tracking-wider">
                     {profileType === 'university' ? 'Universidade' : 'Escola'}
                   </p>

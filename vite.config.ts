@@ -14,8 +14,8 @@ export default defineConfig(({mode}) => {
         registerType: 'autoUpdate',
         includeAssets: ['favicon.ico', 'pwa-icon.svg'],
         manifest: {
-          name: 'SmartPlan Pro',
-          short_name: 'SmartPlan',
+          name: 'Agende Tarefas',
+          short_name: 'Agende Tarefas',
           description: 'Organize sua vida acadêmica e pessoal com inteligência.',
           theme_color: '#ffffff',
           background_color: '#ffffff',
