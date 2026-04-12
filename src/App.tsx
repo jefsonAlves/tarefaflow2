@@ -25,7 +25,8 @@ import {
   X,
   CheckSquare,
   BookOpen,
-  StickyNote
+  StickyNote,
+  Download
 } from 'lucide-react';
 import { cn, formatDate } from './lib/utils';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
@@ -220,10 +221,36 @@ export default function App() {
   const [showDiagnostics, setShowDiagnostics] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [authErrorMessage, setAuthErrorMessage] = useState('');
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [showInstallPrompt, setShowInstallPrompt] = useState(false);
 
   // Admin State
   const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
   const [paymentRequests, setPaymentRequests] = useState<any[]>([]);
+
+  useEffect(() => {
+    const handleBeforeInstallPrompt = (e: Event) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+      setShowInstallPrompt(true);
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    };
+  }, []);
+
+  const handleInstallClick = async () => {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    if (outcome === 'accepted') {
+      setShowInstallPrompt(false);
+    }
+    setDeferredPrompt(null);
+  };
 
   useEffect(() => {
     try {
@@ -1499,6 +1526,39 @@ export default function App() {
             )}
           </motion.div>
         )}
+
+        {showInstallPrompt && (
+          <motion.div 
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-6 bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-4 rounded-2xl shadow-lg shadow-blue-200 flex flex-col sm:flex-row items-center justify-between gap-4"
+          >
+            <div className="flex items-center gap-3">
+              <div className="bg-white/20 p-2 rounded-xl">
+                <Download className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <h3 className="font-bold">Instalar SmartPlan Pro</h3>
+                <p className="text-sm text-blue-100">Instale o aplicativo para acesso rápido e notificações.</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              <button 
+                onClick={() => setShowInstallPrompt(false)}
+                className="flex-1 sm:flex-none px-4 py-2 text-sm font-bold text-blue-100 hover:bg-white/10 rounded-xl transition-colors"
+              >
+                Agora não
+              </button>
+              <button 
+                onClick={handleInstallClick}
+                className="flex-1 sm:flex-none px-6 py-2 bg-white text-blue-600 text-sm font-bold rounded-xl shadow-sm hover:bg-blue-50 transition-colors"
+              >
+                Instalar
+              </button>
+            </div>
+          </motion.div>
+        )}
+
         <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
           <div className="flex items-center gap-4">
             <button 
