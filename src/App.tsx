@@ -1107,7 +1107,7 @@ export default function App() {
           const enableUrl = `https://console.developers.google.com/apis/api/calendar-json.googleapis.com/overview?project=${projectId}`;
           console.warn(`Google Calendar API não ativada. Ative em: ${enableUrl}`);
           setDiagnosticStatus(prev => ({ ...prev, calendar: 'denied' }));
-          setAuthErrorMessage(`A API do Google Calendar não está ativada. Por favor, ative-a no console do Google Cloud.`);
+          setAuthErrorMessage(`A API do Google Calendar não está ativada. Para que o sistema funcione corretamente, você precisa ativá-la no console do Google Cloud: ${enableUrl}`);
           setShowAuthModal(true);
         }
         if (msg.toLowerCase().includes("token") || 
@@ -1166,6 +1166,8 @@ export default function App() {
 
       // 2. Bidirectional Sync with Conflict Resolution (Local Priority)
       let count = 0;
+      const googleTaskIds = new Set(googleTasks.map((t: any) => t.id));
+
       for (const gTask of googleTasks) {
         count++;
         setSyncProgress(prev => ({ ...prev, current: count, message: `Sincronizando: ${gTask.title || 'Sem Título'}` }));
@@ -1205,7 +1207,36 @@ export default function App() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ accessToken, task: localTask })
           });
+          
+          // Update lastSyncAt locally
+          try {
+            await updateDoc(doc(db, 'tasks', localTask.id), {
+              lastSyncAt: new Date().toISOString()
+            });
+          } catch (e) {
+            handleFirestoreError(e, OperationType.UPDATE, `tasks/${localTask.id}`);
+          }
+          
           syncGoogleCalendar(localTask);
+        }
+      }
+
+      // Handle deletions: Local tasks that have an externalId but are no longer in Google Tasks
+      const localTasksWithExternalId = tasks.filter(t => t.source === 'tasks' && t.externalId);
+      for (const lTask of localTasksWithExternalId) {
+        if (!googleTaskIds.has(lTask.externalId)) {
+          try {
+            await deleteDoc(doc(db, 'tasks', lTask.id));
+            if (lTask.calendarEventId) {
+              await fetch('/api/google/calendar/delete', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ accessToken, eventId: lTask.calendarEventId })
+              });
+            }
+          } catch (e) {
+            handleFirestoreError(e, OperationType.DELETE, `tasks/${lTask.id}`);
+          }
         }
       }
 
@@ -1255,7 +1286,7 @@ export default function App() {
         const enableUrl = `https://console.developers.google.com/apis/api/tasks.googleapis.com/overview?project=${projectId}`;
         
         setDiagnosticStatus(prev => ({ ...prev, tasks: 'denied' }));
-        setAuthErrorMessage(`A API do Google Tasks não está ativada. Ative em: ${enableUrl}`);
+        setAuthErrorMessage(`A API do Google Tasks não está ativada. Para que o sistema funcione corretamente, você precisa ativá-la no console do Google Cloud: ${enableUrl}`);
         setShowAuthModal(true);
         return;
       }
@@ -1493,7 +1524,7 @@ export default function App() {
         const enableUrl = `https://console.developers.google.com/apis/api/classroom.googleapis.com/overview?project=${projectId}`;
         
         setDiagnosticStatus(prev => ({ ...prev, classroom: 'denied' }));
-        setAuthErrorMessage(`A API do Google Classroom não está ativada. Ative em: ${enableUrl}`);
+        setAuthErrorMessage(`A API do Google Classroom não está ativada. Para que o sistema funcione corretamente, você precisa ativá-la no console do Google Cloud: ${enableUrl}`);
         setShowAuthModal(true);
         return;
       }
@@ -1789,7 +1820,13 @@ export default function App() {
             ) : activeTab === 'reminders' ? (
               <RemindersView tasks={tasks.filter(t => t.reminderConfig)} />
             ) : activeTab === 'settings' ? (
-              <SettingsView userProfile={userProfile} setActiveTab={setActiveTab} onLogout={handleLogout} />
+              <SettingsView 
+                userProfile={userProfile} 
+                setActiveTab={setActiveTab} 
+                onLogout={handleLogout} 
+                tasks={tasks}
+                subjects={subjects}
+              />
             ) : activeTab === 'admin' && userProfile?.role_user === 'admin' ? (
               <AdminPanel 
                 users={allUsers}
@@ -1923,9 +1960,24 @@ export default function App() {
                 <X className="w-8 h-8 text-amber-600" />
               </div>
               <h3 className="text-2xl font-bold text-slate-900 text-center mb-4">Conexão Necessária</h3>
-              <p className="text-slate-600 text-center mb-8 leading-relaxed">
-                {authErrorMessage}
-              </p>
+              <div className="text-slate-600 text-center mb-8 leading-relaxed space-y-4">
+                {authErrorMessage.includes('http') ? (
+                  <>
+                    <p>{authErrorMessage.split('http')[0]}</p>
+                    <a 
+                      href={'http' + authErrorMessage.split('http')[1]} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="inline-block px-4 py-2 bg-amber-50 text-amber-700 rounded-xl text-xs font-bold border border-amber-200 hover:bg-amber-100 transition-colors break-all"
+                    >
+                      Clique aqui para ativar a API
+                    </a>
+                    <p className="text-[10px] text-slate-400 italic">Após ativar, aguarde 1-2 minutos e tente novamente.</p>
+                  </>
+                ) : (
+                  <p>{authErrorMessage}</p>
+                )}
+              </div>
               <div className="flex flex-col gap-3">
                 <button 
                   onClick={() => {
@@ -2037,8 +2089,8 @@ function CalendarView({ tasks }: { tasks: Task[] }) {
         </div>
 
         <div className="grid grid-cols-7 gap-1 md:gap-2">
-          {["D", "S", "T", "Q", "Q", "S", "S"].map(day => (
-            <div key={day} className="text-center text-[10px] md:text-xs font-bold text-slate-400 uppercase py-2">{day}</div>
+          {["D", "S", "T", "Q", "Q", "S", "S"].map((day, index) => (
+            <div key={`${day}-${index}`} className="text-center text-[10px] md:text-xs font-bold text-slate-400 uppercase py-2">{day}</div>
           ))}
           
           {Array.from({ length: firstDayOfMonth }).map((_, i) => (
