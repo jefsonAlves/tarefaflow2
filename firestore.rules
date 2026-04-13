@@ -139,5 +139,10 @@ service cloud.firestore {
     match /users/{userId} {
       allow read, write: if isOwner(userId) || isAdmin();
     }
+
+    // Internal collection for connection testing
+    match /_internal/{docId} {
+      allow read: if true;
+    }
   }
 }

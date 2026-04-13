@@ -2,7 +2,7 @@ import * as React from 'react';
 import { useState, useEffect, useMemo, Component } from 'react';
 import { auth, signIn, handleRedirectResult, db, logout } from './firebase';
 import { onAuthStateChanged, User } from 'firebase/auth';
-import { collection, query, where, onSnapshot, orderBy, addDoc, updateDoc, doc, deleteDoc, Timestamp, getDoc, setDoc } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, orderBy, addDoc, updateDoc, doc, deleteDoc, Timestamp, getDoc, setDoc, getDocFromServer } from 'firebase/firestore';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Plus, 
@@ -389,6 +389,17 @@ export default function App() {
 
     const unsubscribe = onAuthStateChanged(auth, async (u) => {
       setUser(u);
+      
+      // Test Firestore connection on boot
+      try {
+        await getDocFromServer(doc(db, '_internal', 'connection_test'));
+        console.log("Firestore connection verified");
+      } catch (error: any) {
+        console.error("Firestore initial connection test failed:", error);
+        if (error.code === 'unavailable' || error.message?.includes('offline')) {
+          setInitializationError("Não foi possível conectar ao banco de dados. Isso pode indicar uma configuração incorreta do Firebase ou falta de internet.");
+        }
+      }
       
       if (u) {
         try {
@@ -1146,22 +1157,27 @@ export default function App() {
       
       if (!res.ok) {
         const msg = data.error || "";
-        if (msg.includes("calendar-json.googleapis.com") || msg.includes("API has not been used")) {
+        const isApiDisabled = msg.includes("googleapis.com") || msg.includes("API has not been used") || res.status === 403;
+        
+        if (isApiDisabled) {
           const projectMatch = msg.match(/project (\d+)/);
-          const projectId = projectMatch ? projectMatch[1] : "";
+          const projectId = projectMatch ? projectMatch[1] : "537809046235";
           const enableUrl = `https://console.developers.google.com/apis/api/calendar-json.googleapis.com/overview?project=${projectId}`;
+          
           console.warn(`Google Calendar API não ativada. Ative em: ${enableUrl}`);
           setDiagnosticStatus(prev => ({ ...prev, calendar: 'denied' }));
-          setAuthErrorMessage(`A API do Google Calendar não está ativada. Para que o sistema funcione corretamente, você precisa ativá-la no console do Google Cloud: ${enableUrl}`);
+          setAuthErrorMessage(`ERRO CRÍTICO (403): A API do Google Calendar não está ativada no seu projeto Google Cloud (${projectId}). \n\nPara corrigir:\n1. Clique no link abaixo\n2. Clique no botão azul "ATIVAR"\n3. Aguarde 2 minutos\n4. Clique em "Recarregar Aplicativo"\n\nLink: ${enableUrl}`);
           setShowAuthModal(true);
-        }
-        if (msg.toLowerCase().includes("token") || 
+        } else if (msg.toLowerCase().includes("token") || 
             msg.toLowerCase().includes("auth") || 
-            msg.toLowerCase().includes("credentials")) {
+            msg.toLowerCase().includes("credentials") ||
+            res.status === 401) {
           setAccessToken(null);
           sessionStorage.removeItem('google_access_token');
-          setAuthErrorMessage("Sua sessão do Google Calendar expirou. Por favor, reconecte sua conta.");
+          setAuthErrorMessage("Sua sessão do Google Calendar expirou ou as permissões são insuficientes. Por favor, reconecte sua conta.");
           setShowAuthModal(true);
+        } else {
+          showToast(`Erro ao sincronizar calendário: ${msg}`, 'error');
         }
         return;
       }
@@ -1339,22 +1355,22 @@ export default function App() {
       
       if (errorMessage.toLowerCase().includes("token") || 
           errorMessage.toLowerCase().includes("auth") || 
-          errorMessage.toLowerCase().includes("credentials")) {
+          errorMessage.toLowerCase().includes("credentials") ||
+          errorMessage.includes("401") || errorMessage.includes("403")) {
         setAccessToken(null);
         sessionStorage.removeItem('google_access_token');
-        // alert("Sua sessão do Google expirou. Por favor, faça login novamente.");
-        setAuthErrorMessage("Sua sessão do Google Tasks expirou. Por favor, reconecte sua conta.");
+        setAuthErrorMessage("Sua sessão do Google Tasks expirou ou as permissões são insuficientes. Por favor, reconecte sua conta.");
         setShowAuthModal(true);
         return;
       }
 
-      if (errorMessage.includes("tasks.googleapis.com") || errorMessage.includes("API has not been used")) {
+      if (errorMessage.includes("tasks.googleapis.com") || errorMessage.includes("API has not been used") || errorMessage.includes("403")) {
         const projectMatch = errorMessage.match(/project (\d+)/);
-        const projectId = projectMatch ? projectMatch[1] : "";
+        const projectId = projectMatch ? projectMatch[1] : "537809046235";
         const enableUrl = `https://console.developers.google.com/apis/api/tasks.googleapis.com/overview?project=${projectId}`;
         
         setDiagnosticStatus(prev => ({ ...prev, tasks: 'denied' }));
-        setAuthErrorMessage(`A API do Google Tasks não está ativada. Para que o sistema funcione corretamente, você precisa ativá-la no console do Google Cloud: ${enableUrl}`);
+        setAuthErrorMessage(`A API do Google Tasks não está ativada no seu projeto Google Cloud (${projectId}). Para que o sistema funcione corretamente, você precisa ativá-la: ${enableUrl}`);
         setShowAuthModal(true);
         return;
       }
@@ -1889,6 +1905,7 @@ export default function App() {
                 userProfile={userProfile} 
                 setActiveTab={setActiveTab} 
                 onLogout={handleLogout} 
+                onReconnect={handleSignIn}
                 tasks={tasks}
                 subjects={subjects}
               />
@@ -2069,7 +2086,7 @@ export default function App() {
                     <p className="text-[10px] text-slate-400 italic">Após ativar, aguarde 1-2 minutos e tente novamente.</p>
                   </>
                 ) : (
-                  <p>{authErrorMessage}</p>
+                  <p className="whitespace-pre-wrap">{authErrorMessage}</p>
                 )}
               </div>
               <div className="flex flex-col gap-3">

@@ -1,17 +1,19 @@
 import { useTranslation } from 'react-i18next';
 import { UserProfile, Task, Subject } from '../types';
-import { Shield, LogOut, CheckCircle2, TrendingUp, Calendar as CalendarIcon } from 'lucide-react';
+import { Shield, LogOut, CheckCircle2, TrendingUp, Calendar as CalendarIcon, RefreshCw } from 'lucide-react';
 
 export function SettingsView({ 
   userProfile, 
   setActiveTab, 
   onLogout,
+  onReconnect,
   tasks = [],
   subjects = []
 }: { 
   userProfile: UserProfile | null, 
   setActiveTab: (tab: string) => void, 
   onLogout: () => void,
+  onReconnect?: () => void,
   tasks?: Task[],
   subjects?: Subject[]
 }) {
@@ -104,6 +106,16 @@ export function SettingsView({
               </button>
             </div>
           </div>
+
+          {onReconnect && (
+            <button 
+              onClick={onReconnect}
+              className="w-full p-4 bg-blue-50 text-blue-600 rounded-xl shadow-sm flex items-center justify-center gap-2 font-bold hover:bg-blue-100 transition-colors"
+            >
+              <RefreshCw className="w-5 h-5" />
+              Re-conectar Google
+            </button>
+          )}
 
           <button 
             onClick={onLogout}
