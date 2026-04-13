@@ -176,7 +176,31 @@ export default function App() {
     setPaymentRequests([]);
   };
 
+  const playAlarmSound = () => {
+    try {
+      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const oscillator = audioCtx.createOscillator();
+      const gainNode = audioCtx.createGain();
+      
+      oscillator.connect(gainNode);
+      gainNode.connect(audioCtx.destination);
+      
+      oscillator.type = 'sine';
+      oscillator.frequency.setValueAtTime(880, audioCtx.currentTime); // A5
+      oscillator.frequency.exponentialRampToValueAtTime(440, audioCtx.currentTime + 0.1); // Drop to A4
+      
+      gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.5);
+      
+      oscillator.start();
+      oscillator.stop(audioCtx.currentTime + 0.5);
+    } catch (e) {
+      console.warn("Could not play alarm sound", e);
+    }
+  };
+
   const triggerNotification = (title: string, options: NotificationOptions) => {
+    playAlarmSound();
     if ('Notification' in window && Notification.permission === 'granted') {
       try {
         new Notification(title, options);
@@ -501,7 +525,19 @@ export default function App() {
 
     checkProactiveNotifications();
     const interval = setInterval(checkProactiveNotifications, 60 * 1000); // Check every 1 min for precise reminders
-    return () => clearInterval(interval);
+    
+    const requestNotificationPermission = () => {
+      if ('Notification' in window && Notification.permission === 'default') {
+        Notification.requestPermission();
+      }
+      document.removeEventListener('click', requestNotificationPermission);
+    };
+    document.addEventListener('click', requestNotificationPermission);
+    
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('click', requestNotificationPermission);
+    };
   }, [tasks, user]);
 
   const [isLoggingIn, setIsLoggingIn] = useState(false);
@@ -1071,6 +1107,8 @@ export default function App() {
           const enableUrl = `https://console.developers.google.com/apis/api/calendar-json.googleapis.com/overview?project=${projectId}`;
           console.warn(`Google Calendar API não ativada. Ative em: ${enableUrl}`);
           setDiagnosticStatus(prev => ({ ...prev, calendar: 'denied' }));
+          setAuthErrorMessage(`A API do Google Calendar não está ativada. Por favor, ative-a no console do Google Cloud.`);
+          setShowAuthModal(true);
         }
         if (msg.toLowerCase().includes("token") || 
             msg.toLowerCase().includes("auth") || 
@@ -1935,6 +1973,9 @@ export default function App() {
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({ accessToken, task })
                 }).catch(err => console.error("Error syncing to Google Tasks:", err));
+              } else {
+                setAuthErrorMessage("Sua sessão do Google expirou. Reconecte para salvar no Google Agenda.");
+                setShowAuthModal(true);
               }
             }}
           />
