@@ -82,6 +82,11 @@ function handleFirestoreError(error: unknown, operationType: OperationType, path
     path
   }
   console.error('Firestore Error: ', JSON.stringify(errInfo));
+  
+  // Dispatch custom event for UI feedback
+  const event = new CustomEvent('firestore-error', { detail: errInfo });
+  window.dispatchEvent(event);
+  
   throw new Error(JSON.stringify(errInfo));
 }
 
@@ -216,6 +221,37 @@ export default function App() {
     }
   };
   
+  const [toasts, setToasts] = useState<{ id: string; message: string; type: 'error' | 'success' | 'info' }[]>([]);
+
+  const showToast = (message: string, type: 'error' | 'success' | 'info' = 'info') => {
+    const id = Math.random().toString(36).substring(2, 9);
+    setToasts(prev => [...prev, { id, message, type }]);
+    setTimeout(() => {
+      setToasts(prev => prev.filter(t => t.id !== id));
+    }, 5000);
+  };
+
+  useEffect(() => {
+    const handleGlobalError = (e: any) => {
+      const errInfo = e.detail;
+      let userMessage = "Ocorreu um erro ao processar sua solicitação no banco de dados.";
+      
+      const errorStr = errInfo.error.toLowerCase();
+      if (errorStr.includes("permission-denied") || errorStr.includes("missing or insufficient permissions")) {
+        userMessage = "Você não tem permissão para realizar esta ação. Verifique se você está conectado corretamente.";
+      } else if (errorStr.includes("quota-exceeded")) {
+        userMessage = "O limite de uso do banco de dados foi atingido. Tente novamente mais tarde.";
+      } else if (errorStr.includes("offline")) {
+        userMessage = "Você parece estar offline. Verifique sua conexão com a internet.";
+      }
+      
+      showToast(userMessage, 'error');
+    };
+
+    window.addEventListener('firestore-error', handleGlobalError);
+    return () => window.removeEventListener('firestore-error', handleGlobalError);
+  }, []);
+
   // Academic Structure State
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [profileType, setProfileType] = useState<StudentProfileType>('school');
@@ -671,12 +707,21 @@ export default function App() {
 
   const deleteTask = async (task: Task) => {
     try {
-      if (accessToken && task.calendarEventId) {
-        fetch('/api/google/calendar/delete', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ accessToken, eventId: task.calendarEventId })
-        }).catch(e => console.error("Calendar Delete Error:", e));
+      if (accessToken) {
+        if (task.calendarEventId) {
+          fetch('/api/google/calendar/delete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ accessToken, eventId: task.calendarEventId })
+          }).catch(e => console.error("Calendar Delete Error:", e));
+        }
+        if (task.externalId) {
+          fetch('/api/google/tasks/delete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ accessToken, externalId: task.externalId })
+          }).catch(e => console.error("Tasks Delete Error:", e));
+        }
       }
       await deleteDoc(doc(db, 'tasks', task.id));
     } catch (e) {
@@ -1164,7 +1209,7 @@ export default function App() {
 
       setSyncProgress({ current: 0, total: googleTasks.length, message: 'Sincronizando tarefas...' });
 
-      // 2. Bidirectional Sync with Conflict Resolution (Local Priority)
+      // 2. Bidirectional Sync with Conflict Resolution (Latest Wins)
       let count = 0;
       const googleTaskIds = new Set(googleTasks.map((t: any) => t.id));
 
@@ -1189,6 +1234,7 @@ export default function App() {
             externalId: gTask.id,
             userId: user.uid,
             createdAt: Timestamp.now(),
+            updatedAt: Timestamp.fromDate(new Date(gTask.updated || Date.now())),
             lastSyncAt: new Date().toISOString()
           };
           let docRef;
@@ -1196,28 +1242,50 @@ export default function App() {
             docRef = await addDoc(collection(db, 'tasks'), taskData);
           } catch (e) {
             handleFirestoreError(e, OperationType.CREATE, 'tasks');
-            return; // Should not reach here if handleFirestoreError throws
+            return;
           }
           syncGoogleCalendar({ id: docRef.id, ...taskData } as Task);
         } else {
-          // Conflict Resolution: If local is newer or modified, push to cloud
-          // For simplicity, we'll push local changes if they exist
-          await fetch('/api/google/tasks/sync', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ accessToken, task: localTask })
-          });
+          // Conflict Resolution: Latest version wins
+          const googleUpdated = new Date(gTask.updated).getTime();
+          const localUpdated = localTask.updatedAt?.toDate ? localTask.updatedAt.toDate().getTime() : new Date(localTask.updatedAt || 0).getTime();
           
-          // Update lastSyncAt locally
-          try {
-            await updateDoc(doc(db, 'tasks', localTask.id), {
-              lastSyncAt: new Date().toISOString()
+          if (googleUpdated > localUpdated + 1000) { // 1s buffer
+            // Update local from Google
+            const updateData = {
+              title: (gTask.title || 'Sem Título').substring(0, 500),
+              description: (gTask.notes || '').substring(0, 2000),
+              dueDate: gTask.due || new Date().toISOString(),
+              hasDueDate: !!gTask.due,
+              completed: gTask.status === 'completed',
+              status: gTask.status === 'completed' ? 'done' : 'todo',
+              lastSyncAt: new Date().toISOString(),
+              updatedAt: Timestamp.fromDate(new Date(gTask.updated))
+            };
+            try {
+              await updateDoc(doc(db, 'tasks', localTask.id), updateData);
+              syncGoogleCalendar({ ...localTask, ...updateData } as Task);
+            } catch (e) {
+              handleFirestoreError(e, OperationType.UPDATE, `tasks/${localTask.id}`);
+            }
+          } else if (localUpdated > googleUpdated + 1000) {
+            // Update Google from local
+            await fetch('/api/google/tasks/sync', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ accessToken, task: localTask })
             });
-          } catch (e) {
-            handleFirestoreError(e, OperationType.UPDATE, `tasks/${localTask.id}`);
+            
+            try {
+              await updateDoc(doc(db, 'tasks', localTask.id), {
+                lastSyncAt: new Date().toISOString()
+              });
+            } catch (e) {
+              handleFirestoreError(e, OperationType.UPDATE, `tasks/${localTask.id}`);
+            }
+            
+            syncGoogleCalendar(localTask);
           }
-          
-          syncGoogleCalendar(localTask);
         }
       }
 
@@ -1263,7 +1331,7 @@ export default function App() {
         }
       }
 
-      // alert("Sincronização com Google Tasks concluída!");
+      showToast("Sincronização com Google Tasks concluída!", 'success');
     } catch (e: any) {
       console.error("Tasks Sync Error:", e);
       
@@ -1332,8 +1400,6 @@ export default function App() {
       const courses = coursesData;
 
       if (!Array.isArray(courses)) throw new Error("Invalid response from Classroom API");
-
-      setSyncProgress({ current: 0, total: courses.length, message: 'Processando turmas...' });
 
       let totalImported = 0;
       let totalUpdated = 0;
@@ -1501,9 +1567,8 @@ export default function App() {
       }
       
       localStorage.setItem(`last_sync_${user.uid}`, new Date().toISOString());
-      
-      // Removed alerts for direct loading experience
-      console.log(`Sync complete: ${totalImported} imported, ${totalUpdated} updated`);
+      setSyncProgress({ current: 0, total: courses.length, message: 'Sincronização concluída!' });
+      showToast("Sincronização com Google Classroom concluída!", 'success');
     } catch (e: any) {
       console.error("Sync Error:", e);
       
@@ -1948,7 +2013,36 @@ export default function App() {
 
       {/* Auth Error Modal */}
       <AnimatePresence>
-        {showAuthModal && (
+        {/* Toast Notifications */}
+      <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-[100] flex flex-col gap-2 w-full max-w-md px-4 pointer-events-none">
+        <AnimatePresence>
+          {toasts.map(toast => (
+            <motion.div
+              key={toast.id}
+              initial={{ opacity: 0, y: 20, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className={cn(
+                "p-4 rounded-2xl shadow-lg border flex items-center gap-3 pointer-events-auto",
+                toast.type === 'error' ? "bg-red-50 border-red-100 text-red-800" :
+                toast.type === 'success' ? "bg-green-50 border-green-100 text-green-800" :
+                "bg-white border-slate-200 text-slate-800"
+              )}
+            >
+              {toast.type === 'error' ? <AlertCircle className="w-5 h-5 shrink-0" /> : <CheckCircle2 className="w-5 h-5 shrink-0" />}
+              <p className="text-sm font-medium">{toast.message}</p>
+              <button 
+                onClick={() => setToasts(prev => prev.filter(t => t.id !== toast.id))}
+                className="ml-auto p-1 hover:bg-black/5 rounded-lg transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </motion.div>
+          ))}
+        </AnimatePresence>
+      </div>
+
+      {showAuthModal && (
           <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md">
             <motion.div 
               initial={{ scale: 0.9, opacity: 0 }}
@@ -1988,6 +2082,14 @@ export default function App() {
                 >
                   Conectar Conta Google
                 </button>
+                {authErrorMessage.includes('http') && (
+                  <button 
+                    onClick={() => window.location.reload()}
+                    className="w-full py-4 bg-emerald-600 text-white rounded-2xl font-bold shadow-lg shadow-emerald-200 hover:bg-emerald-700 transition-all flex items-center justify-center gap-2"
+                  >
+                    <RefreshCw className="w-5 h-5" /> Recarregar Aplicativo
+                  </button>
+                )}
                 <button 
                   onClick={() => setShowAuthModal(false)}
                   className="w-full py-4 bg-slate-100 text-slate-600 rounded-2xl font-bold hover:bg-slate-200 transition-all"

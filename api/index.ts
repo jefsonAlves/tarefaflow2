@@ -203,4 +203,29 @@ app.post("/api/google/calendar/delete", async (req, res) => {
   }
 });
 
+app.post("/api/google/tasks/delete", async (req, res) => {
+  const { accessToken, externalId } = req.body;
+  if (!accessToken || !externalId) return res.status(400).json({ error: "Missing parameters" });
+
+  try {
+    const auth = new OAuth2Client();
+    auth.setCredentials({ access_token: accessToken });
+    const tasksApi = google.tasks({ version: "v1", auth });
+    
+    const taskLists = await tasksApi.tasklists.list();
+    const tasklist = taskLists.data.items?.[0]?.id;
+    if (!tasklist) throw new Error("No tasklist found");
+
+    await tasksApi.tasks.delete({
+      tasklist,
+      task: externalId,
+    });
+    res.json({ status: 'deleted' });
+  } catch (error: any) {
+    console.error("Google Tasks Delete Error:", error);
+    const message = error.response?.data?.error?.message || error.message || "Failed to delete Google Task";
+    res.status(500).json({ error: message });
+  }
+});
+
 export default app;

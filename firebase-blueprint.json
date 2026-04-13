@@ -9,24 +9,31 @@
         "title": { "type": "string" },
         "description": { "type": "string" },
         "dueDate": { "type": "string", "format": "date-time" },
+        "hasDueDate": { "type": "boolean" },
         "completed": { "type": "boolean" },
+        "status": { "type": "string", "enum": ["todo", "in-progress", "done", "archived", "pending", "completed"] },
         "priority": { "type": "string", "enum": ["low", "medium", "high"] },
         "category": { "type": "string" },
-        "reminderConfig": {
-          "type": "object",
-          "properties": {
-            "type": { "type": "string", "enum": ["once", "repeated", "nagging"] },
-            "intervalMinutes": { "type": "number" },
-            "maxRepeats": { "type": "number" },
-            "nextReminder": { "type": "string", "format": "date-time" }
-          }
-        },
         "source": { "type": "string", "enum": ["local", "classroom", "tasks"] },
         "externalId": { "type": "string" },
-        "lastSync": { "type": "string", "format": "date-time" },
-        "userId": { "type": "string" }
+        "courseId": { "type": "string" },
+        "role": { "type": "string", "enum": ["student", "teacher"] },
+        "submissionStatus": { "type": "string" },
+        "assignedGrade": { "type": "number" },
+        "maxPoints": { "type": "number" },
+        "alternateLink": { "type": "string" },
+        "calendarEventId": { "type": "string" },
+        "order": { "type": "number" },
+        "subjectId": { "type": "string" },
+        "termId": { "type": "string" },
+        "localNote": { "type": "string" },
+        "lastSyncAt": { "type": "string", "format": "date-time" },
+        "updateTime": { "type": "string" },
+        "userId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
       },
-      "required": ["title", "userId", "completed"]
+      "required": ["title", "userId", "completed", "source"]
     },
     "UserConfig": {
       "title": "User Configuration",
