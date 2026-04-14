@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next';
-import { UserProfile, Task, Subject } from '../types';
-import { Shield, LogOut, CheckCircle2, TrendingUp, Calendar as CalendarIcon, RefreshCw } from 'lucide-react';
+import { UserProfile, Task, Subject, AcademicTerm, StudentProfileType } from '../types';
+import { Shield, LogOut, CheckCircle2, TrendingUp, Calendar as CalendarIcon, RefreshCw, GraduationCap, BookOpen, Plus, Trash2 } from 'lucide-react';
+import { cn } from '../lib/utils';
 
 export function SettingsView({ 
   userProfile, 
@@ -8,14 +9,24 @@ export function SettingsView({
   onLogout,
   onReconnect,
   tasks = [],
-  subjects = []
+  subjects = [],
+  profileType,
+  setProfileType,
+  terms = [],
+  onAddTerm,
+  onDeleteTerm
 }: { 
   userProfile: UserProfile | null, 
   setActiveTab: (tab: string) => void, 
   onLogout: () => void,
   onReconnect?: () => void,
   tasks?: Task[],
-  subjects?: Subject[]
+  subjects?: Subject[],
+  profileType: StudentProfileType,
+  setProfileType: (type: StudentProfileType) => void,
+  terms?: AcademicTerm[],
+  onAddTerm: () => void,
+  onDeleteTerm: (id: string) => void
 }) {
   const { t, i18n } = useTranslation();
 
@@ -81,15 +92,83 @@ export function SettingsView({
             </button>
           )}
 
-          <div className="p-4 bg-white rounded-xl shadow-sm">
-            <h3 className="font-semibold mb-2">{t('academicProfile')}</h3>
-            <select className="w-full p-2 border rounded-lg bg-slate-50">
-              <option value="school">{t('school')}</option>
-              <option value="university">{t('university')}</option>
-            </select>
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 space-y-8">
+            <section className="space-y-4">
+              <h3 className="text-xl font-bold text-slate-800">Tipo de Perfil Acadêmico</h3>
+              <div className="grid grid-cols-2 gap-4">
+                <button 
+                  onClick={() => setProfileType('school')}
+                  className={cn(
+                    "p-6 rounded-3xl border-2 transition-all text-left space-y-2",
+                    profileType === 'school' ? "border-blue-600 bg-blue-50" : "border-slate-100 bg-white hover:border-slate-200"
+                  )}
+                >
+                  <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center", profileType === 'school' ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-400")}>
+                    <GraduationCap className="w-6 h-6" />
+                  </div>
+                  <h3 className="font-bold text-slate-800">Escolar</h3>
+                  <p className="text-xs text-slate-500">Organizado por séries, anos ou bimestres.</p>
+                </button>
+                <button 
+                  onClick={() => setProfileType('university')}
+                  className={cn(
+                    "p-6 rounded-3xl border-2 transition-all text-left space-y-2",
+                    profileType === 'university' ? "border-blue-600 bg-blue-50" : "border-slate-100 bg-white hover:border-slate-200"
+                  )}
+                >
+                  <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center", profileType === 'university' ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-400")}>
+                    <BookOpen className="w-6 h-6" />
+                  </div>
+                  <h3 className="font-bold text-slate-800">Universitário</h3>
+                  <p className="text-xs text-slate-500">Organizado por semestres e créditos.</p>
+                </button>
+              </div>
+            </section>
+
+            <section className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xl font-bold text-slate-800">Períodos Letivos</h3>
+                <button onClick={onAddTerm} className="text-blue-600 font-bold text-sm hover:underline flex items-center gap-1">
+                  <Plus className="w-4 h-4" />
+                  Adicionar Período
+                </button>
+              </div>
+              <div className="space-y-3">
+                {terms.map(term => (
+                  <div key={term.id} className="group bg-slate-50 p-4 rounded-2xl border border-slate-100 flex items-center justify-between hover:bg-white hover:shadow-md transition-all">
+                    <div>
+                      <h3 className="font-bold text-slate-800">{term.name}</h3>
+                      <p className="text-xs text-slate-500">
+                        {new Date(term.startDate).toLocaleDateString()} - {new Date(term.endDate).toLocaleDateString()}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      {term.active && (
+                        <span className="px-3 py-1 bg-green-100 text-green-700 text-[10px] font-bold rounded-full uppercase">Ativo</span>
+                      )}
+                      <button 
+                        onClick={() => {
+                          if(confirm('Tem certeza que deseja excluir este período?')) {
+                            onDeleteTerm(term.id);
+                          }
+                        }}
+                        className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all opacity-0 group-hover:opacity-100"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+                {terms.length === 0 && (
+                  <div className="text-center py-8 bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200">
+                    <p className="text-sm text-slate-500">Nenhum período letivo cadastrado.</p>
+                  </div>
+                )}
+              </div>
+            </section>
           </div>
-          
-          <div className="p-4 bg-white rounded-xl shadow-sm">
+
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
             <h3 className="font-semibold mb-2">{t('language')}</h3>
             <div className="flex gap-2">
               <button 

@@ -26,7 +26,8 @@ import {
   CheckSquare,
   BookOpen,
   StickyNote,
-  Download
+  Download,
+  Trash2
 } from 'lucide-react';
 import { cn, formatDate } from './lib/utils';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
@@ -1019,6 +1020,15 @@ export default function App() {
     }
   };
 
+  const deleteTerm = async (id: string) => {
+    try {
+      await deleteDoc(doc(db, 'terms', id));
+      showToast('Período excluído com sucesso!', 'success');
+    } catch (e) {
+      handleFirestoreError(e, OperationType.DELETE, `terms/${id}`);
+    }
+  };
+
   const addNote = async (title: string, content: string, subjectId?: string) => {
     if (!user) return;
     try {
@@ -1145,10 +1155,33 @@ export default function App() {
     );
   }
 
+  const fetchWithRetry = async (url: string, options: RequestInit, retries = 3, backoff = 1000): Promise<Response> => {
+    try {
+      const res = await fetch(url, options);
+      if (res.status === 429 && retries > 0) {
+        const retryAfter = res.headers.get('Retry-After');
+        const delay = retryAfter ? parseInt(retryAfter) * 1000 : backoff;
+        await new Promise(resolve => setTimeout(resolve, delay));
+        return fetchWithRetry(url, options, retries - 1, backoff * 2);
+      }
+      if (!res.ok && res.status >= 500 && retries > 0) {
+        await new Promise(resolve => setTimeout(resolve, backoff));
+        return fetchWithRetry(url, options, retries - 1, backoff * 2);
+      }
+      return res;
+    } catch (error) {
+      if (retries > 0) {
+        await new Promise(resolve => setTimeout(resolve, backoff));
+        return fetchWithRetry(url, options, retries - 1, backoff * 2);
+      }
+      throw error;
+    }
+  };
+
   const syncGoogleCalendar = async (task: Task) => {
     if (!user || !accessToken) return;
     try {
-      const res = await fetch('/api/google/calendar/sync', {
+      const res = await fetchWithRetry('/api/google/calendar/sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ accessToken, task })
@@ -1186,7 +1219,8 @@ export default function App() {
       if (data.calendarEventId) {
         try {
           await updateDoc(doc(db, 'tasks', task.id), {
-            calendarEventId: data.calendarEventId
+            calendarEventId: data.calendarEventId,
+            lastSyncAt: new Date().toISOString()
           });
         } catch (e) {
           handleFirestoreError(e, OperationType.UPDATE, `tasks/${task.id}`);
@@ -1200,83 +1234,83 @@ export default function App() {
   const syncGoogleTasks = async () => {
     if (!user || !accessToken) {
       if (!accessToken) {
-        setAuthErrorMessage("Para sincronizar com o Google Tasks, você precisa conectar sua conta Google.");
+        setAuthErrorMessage("Conecte sua conta Google para sincronizar tarefas.");
         setShowAuthModal(true);
       }
       return;
     }
+
     setIsSyncingTasks(true);
-    setSyncProgress({ current: 0, total: 0, message: 'Iniciando sincronização com Google Agenda...' });
+    setSyncProgress({ current: 0, total: 0, message: 'Iniciando sincronização com Google Tasks...' });
+
     try {
-      // 1. Fetch from Google
       setSyncProgress(prev => ({ ...prev, message: 'Buscando tarefas do Google...' }));
-      const res = await fetch('/api/google/tasks/list', {
+      const res = await fetchWithRetry('/api/google/tasks/list', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ accessToken })
       });
-      const googleTasks = await res.json();
-      
+
       if (!res.ok) {
-        throw new Error(googleTasks.error || "Failed to fetch Google Tasks");
+        const data = await res.json();
+        throw new Error(data.error || 'Falha ao buscar tarefas do Google');
       }
+
+      const googleTasks = await res.json();
+      const localTasks = tasks;
       
-      if (!Array.isArray(googleTasks)) throw new Error("Invalid response from Google Tasks");
+      const googleTaskIds = new Set(googleTasks.map((t: any) => t.id));
+      const localTasksWithExternalId = localTasks.filter(t => t.externalId);
+      const localOnly = localTasks.filter(t => !t.externalId && t.source !== 'classroom');
 
       setSyncProgress({ current: 0, total: googleTasks.length, message: 'Sincronizando tarefas...' });
-
-      // 2. Bidirectional Sync with Conflict Resolution (Latest Wins)
+      
       let count = 0;
-      const googleTaskIds = new Set(googleTasks.map((t: any) => t.id));
-
       for (const gTask of googleTasks) {
         count++;
         setSyncProgress(prev => ({ ...prev, current: count, message: `Sincronizando: ${gTask.title || 'Sem Título'}` }));
-        const localTask = tasks.find(t => t.externalId === gTask.id);
+        
+        const localTask = localTasks.find(t => t.externalId === gTask.id);
+        const googleUpdated = new Date(gTask.updated || 0).getTime();
         
         if (!localTask) {
-          // Import new task
+          // New task from Google
           const taskData = {
-            title: (gTask.title || 'Sem Título').substring(0, 500),
+            title: (gTask.title || 'Tarefa do Google').substring(0, 500),
             description: (gTask.notes || '').substring(0, 2000),
             dueDate: gTask.due || new Date().toISOString(),
             hasDueDate: !!gTask.due,
             completed: gTask.status === 'completed',
             status: gTask.status === 'completed' ? 'done' : 'todo',
-            order: 1000,
             priority: 'medium',
             category: 'Google Tasks',
-            source: 'tasks' as const,
+            source: 'tasks',
             externalId: gTask.id,
             userId: user.uid,
             createdAt: Timestamp.now(),
-            updatedAt: Timestamp.fromDate(new Date(gTask.updated || Date.now())),
-            lastSyncAt: new Date().toISOString()
+            updatedAt: Timestamp.now(),
+            lastSyncAt: new Date().toISOString(),
+            order: 0
           };
-          let docRef;
+          
           try {
-            docRef = await addDoc(collection(db, 'tasks'), taskData);
+            const docRef = await addDoc(collection(db, 'tasks'), taskData);
+            syncGoogleCalendar({ id: docRef.id, ...taskData } as Task);
           } catch (e) {
             handleFirestoreError(e, OperationType.CREATE, 'tasks');
-            return;
           }
-          syncGoogleCalendar({ id: docRef.id, ...taskData } as Task);
         } else {
-          // Conflict Resolution: Latest version wins
-          const googleUpdated = new Date(gTask.updated).getTime();
+          // Sync existing
           const localUpdated = localTask.updatedAt?.toDate ? localTask.updatedAt.toDate().getTime() : new Date(localTask.updatedAt || 0).getTime();
           
           if (googleUpdated > localUpdated + 1000) { // 1s buffer
-            // Update local from Google
             const updateData = {
-              title: (gTask.title || 'Sem Título').substring(0, 500),
-              description: (gTask.notes || '').substring(0, 2000),
-              dueDate: gTask.due || new Date().toISOString(),
-              hasDueDate: !!gTask.due,
+              title: (gTask.title || localTask.title).substring(0, 500),
+              description: (gTask.notes || localTask.description).substring(0, 2000),
               completed: gTask.status === 'completed',
-              status: gTask.status === 'completed' ? 'done' : 'todo',
-              lastSyncAt: new Date().toISOString(),
-              updatedAt: Timestamp.fromDate(new Date(gTask.updated))
+              status: gTask.status === 'completed' ? 'done' : localTask.status,
+              updatedAt: Timestamp.fromDate(new Date(gTask.updated)),
+              lastSyncAt: new Date().toISOString()
             };
             try {
               await updateDoc(doc(db, 'tasks', localTask.id), updateData);
@@ -1285,13 +1319,12 @@ export default function App() {
               handleFirestoreError(e, OperationType.UPDATE, `tasks/${localTask.id}`);
             }
           } else if (localUpdated > googleUpdated + 1000) {
-            // Update Google from local
-            await fetch('/api/google/tasks/sync', {
+            // Push local to Google
+            await fetchWithRetry('/api/google/tasks/sync', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ accessToken, task: localTask })
             });
-            
             try {
               await updateDoc(doc(db, 'tasks', localTask.id), {
                 lastSyncAt: new Date().toISOString()
@@ -1299,20 +1332,17 @@ export default function App() {
             } catch (e) {
               handleFirestoreError(e, OperationType.UPDATE, `tasks/${localTask.id}`);
             }
-            
-            syncGoogleCalendar(localTask);
           }
         }
       }
 
-      // Handle deletions: Local tasks that have an externalId but are no longer in Google Tasks
-      const localTasksWithExternalId = tasks.filter(t => t.source === 'tasks' && t.externalId);
+      // Handle deletions
       for (const lTask of localTasksWithExternalId) {
-        if (!googleTaskIds.has(lTask.externalId)) {
+        if (!googleTaskIds.has(lTask.externalId!)) {
           try {
             await deleteDoc(doc(db, 'tasks', lTask.id));
             if (lTask.calendarEventId) {
-              await fetch('/api/google/calendar/delete', {
+              await fetchWithRetry('/api/google/calendar/delete', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ accessToken, eventId: lTask.calendarEventId })
@@ -1324,62 +1354,56 @@ export default function App() {
         }
       }
 
-      // 3. Push Local Tasks that don't have externalId
-      const localOnly = tasks.filter(t => t.source === 'tasks' && !t.externalId);
+      // Push new local tasks to Google
       for (const lTask of localOnly) {
-        const syncRes = await fetch('/api/google/tasks/sync', {
+        const syncRes = await fetchWithRetry('/api/google/tasks/sync', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ accessToken, task: lTask })
         });
-        const syncData = await syncRes.json();
-        if (syncData.externalId) {
-          const updatedTask = { ...lTask, externalId: syncData.externalId, lastSyncAt: new Date().toISOString() };
-          try {
-            await updateDoc(doc(db, 'tasks', lTask.id), {
-              externalId: syncData.externalId,
-              lastSyncAt: new Date().toISOString()
-            });
-          } catch (e) {
-            handleFirestoreError(e, OperationType.UPDATE, `tasks/${lTask.id}`);
+        
+        if (syncRes.ok) {
+          const syncData = await syncRes.json();
+          if (syncData.externalId) {
+            const updatedTask = { ...lTask, externalId: syncData.externalId, lastSyncAt: new Date().toISOString() };
+            try {
+              await updateDoc(doc(db, 'tasks', lTask.id), {
+                externalId: syncData.externalId,
+                lastSyncAt: new Date().toISOString()
+              });
+              syncGoogleCalendar(updatedTask);
+            } catch (e) {
+              handleFirestoreError(e, OperationType.UPDATE, `tasks/${lTask.id}`);
+            }
           }
-          syncGoogleCalendar(updatedTask);
         }
       }
 
-      showToast("Sincronização com Google Tasks concluída!", 'success');
+      setDiagnosticStatus(prev => ({ ...prev, tasks: 'stable' }));
+      showToast('Sincronização com Google Tasks concluída!', 'success');
     } catch (e: any) {
-      console.error("Tasks Sync Error:", e);
+      const errorMessage = e.message || 'Erro desconhecido';
+      console.error("Sync error:", errorMessage);
       
-      let errorMessage = e.message || "Erro desconhecido.";
-      
-      if (errorMessage.toLowerCase().includes("token") || 
-          errorMessage.toLowerCase().includes("auth") || 
-          errorMessage.toLowerCase().includes("credentials") ||
-          errorMessage.includes("401") || errorMessage.includes("403")) {
-        setAccessToken(null);
-        sessionStorage.removeItem('google_access_token');
-        setAuthErrorMessage("Sua sessão do Google Tasks expirou ou as permissões são insuficientes. Por favor, reconecte sua conta.");
+      if (errorMessage.includes("401") || errorMessage.includes("403")) {
+        setAuthErrorMessage("Sua sessão do Google expirou ou permissões são insuficientes. Reconecte sua conta.");
         setShowAuthModal(true);
-        return;
       }
-
+      
       if (errorMessage.includes("tasks.googleapis.com") || errorMessage.includes("API has not been used") || errorMessage.includes("403")) {
         const projectMatch = errorMessage.match(/project (\d+)/);
         const projectId = projectMatch ? projectMatch[1] : "537809046235";
         const enableUrl = `https://console.developers.google.com/apis/api/tasks.googleapis.com/overview?project=${projectId}`;
-        
         setDiagnosticStatus(prev => ({ ...prev, tasks: 'denied' }));
         setAuthErrorMessage(`A API do Google Tasks não está ativada no seu projeto Google Cloud (${projectId}). Para que o sistema funcione corretamente, você precisa ativá-la: ${enableUrl}`);
         setShowAuthModal(true);
-        return;
+      } else {
+        setAuthErrorMessage(`Erro no Google Tasks: ${errorMessage}`);
+        setShowAuthModal(true);
       }
-
-      setDiagnosticStatus(prev => ({ ...prev, tasks: 'stable' }));
-      setAuthErrorMessage(`Erro no Google Tasks: ${errorMessage}`);
-      setShowAuthModal(true);
     } finally {
       setIsSyncingTasks(false);
+      setSyncProgress({ current: 0, total: 0, message: '' });
     }
   };
   const syncClassroom = async () => {
@@ -1394,15 +1418,11 @@ export default function App() {
     setIsSyncing(true);
     setSyncProgress({ current: 0, total: 0, message: 'Iniciando sincronização com Google Classroom...' });
     try {
-      // Mark policies as accepted
       localStorage.setItem(`accepted_policies_${user.uid}`, 'true');
       setShowOnboarding(false);
 
-      // 1. Fetch Courses (Incremental check)
       setSyncProgress(prev => ({ ...prev, message: 'Buscando suas turmas...' }));
-      const lastSync = localStorage.getItem(`last_sync_${user.uid}`) || new Date(0).toISOString();
-      
-      const coursesRes = await fetch('/api/google/classroom/courses', {
+      const coursesRes = await fetchWithRetry('/api/google/classroom/courses', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ accessToken })
@@ -1430,7 +1450,7 @@ export default function App() {
           // Determine role
           const role = course.role || 'student';
           
-          const courseworkRes = await fetch('/api/google/classroom/coursework', {
+          const courseworkRes = await fetchWithRetry('/api/google/classroom/coursework', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ accessToken, courseId: course.id })
@@ -1490,7 +1510,7 @@ export default function App() {
               let submissionCount: { turnedIn: number, total: number } | null = null;
 
               try {
-                const subRes = await fetch('/api/google/classroom/submissions', {
+                const subRes = await fetchWithRetry('/api/google/classroom/submissions', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({ accessToken, courseId: course.id, courseWorkId: work.id, role })
@@ -1908,6 +1928,11 @@ export default function App() {
                 onReconnect={handleSignIn}
                 tasks={tasks}
                 subjects={subjects}
+                profileType={profileType}
+                setProfileType={setProfileType}
+                terms={terms}
+                onAddTerm={() => setShowTermModal(true)}
+                onDeleteTerm={deleteTerm}
               />
             ) : activeTab === 'admin' && userProfile?.role_user === 'admin' ? (
               <AdminPanel 
@@ -1937,7 +1962,19 @@ export default function App() {
                 }}
               />
             ) : (
-              <SubjectsView subjects={subjects} terms={terms} onAddSubject={() => setShowSubjectModal(true)} />
+              <SubjectsView 
+                subjects={subjects} 
+                terms={terms} 
+                onAddSubject={() => setShowSubjectModal(true)} 
+                onDeleteSubject={async (id) => {
+                  try {
+                    await deleteDoc(doc(db, 'subjects', id));
+                    showToast('Disciplina excluída com sucesso!', 'success');
+                  } catch (e) {
+                    handleFirestoreError(e, OperationType.DELETE, `subjects/${id}`);
+                  }
+                }}
+              />
             )}
           </motion.div>
         </AnimatePresence>
@@ -2209,7 +2246,7 @@ function CalendarView({ tasks }: { tasks: Task[] }) {
 
         <div className="grid grid-cols-7 gap-1 md:gap-2">
           {["D", "S", "T", "Q", "Q", "S", "S"].map((day, index) => (
-            <div key={`${day}-${index}`} className="text-center text-[10px] md:text-xs font-bold text-slate-400 uppercase py-2">{day}</div>
+            <div key={`header-${day}-${index}`} className="text-center text-[10px] md:text-xs font-bold text-slate-400 uppercase py-2">{day}</div>
           ))}
           
           {Array.from({ length: firstDayOfMonth }).map((_, i) => (
@@ -3113,37 +3150,83 @@ function CreateTaskModal({ onClose, userId, categories, setCategories, onTaskCre
 
 // --- New View Components ---
 
-function SubjectsView({ subjects, terms, onAddSubject }: { subjects: Subject[], terms: AcademicTerm[], onAddSubject: () => void }) {
+function SubjectsView({ subjects, terms, onAddSubject, onDeleteSubject }: { subjects: Subject[], terms: AcademicTerm[], onAddSubject: () => void, onDeleteSubject: (id: string) => void }) {
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h2 className="text-xl font-bold text-slate-800">Minhas Disciplinas</h2>
-        <button onClick={onAddSubject} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl font-bold text-sm hover:bg-blue-700 transition-all">
-          <Plus className="w-4 h-4" />
+      <div className="flex items-center justify-between bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
+        <div>
+          <h2 className="text-2xl font-black text-slate-800">Minhas Disciplinas</h2>
+          <p className="text-sm text-slate-500 font-medium">Gerencie suas matérias e acompanhe seu progresso.</p>
+        </div>
+        <button 
+          onClick={onAddSubject} 
+          className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-2xl font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-100 active:scale-95"
+        >
+          <Plus className="w-5 h-5" />
           Nova Disciplina
         </button>
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {subjects.map(subject => (
-          <div key={subject.id} className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 hover:shadow-md transition-all">
-            <div className="flex items-center justify-between mb-4">
-              <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-white shadow-lg" style={{ backgroundColor: subject.color }}>
-                <BookOpen className="w-6 h-6" />
-              </div>
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                {terms.find(t => t.id === subject.termId)?.name || 'Sem Período'}
-              </span>
+          <div key={subject.id} className="group bg-white p-6 rounded-[2.5rem] shadow-sm border border-slate-100 hover:shadow-xl hover:border-blue-100 transition-all duration-300 relative overflow-hidden">
+            <div className="absolute top-0 right-0 p-4 opacity-0 group-hover:opacity-100 transition-opacity">
+              <button 
+                onClick={() => {
+                  if(confirm('Tem certeza que deseja excluir esta disciplina?')) {
+                    onDeleteSubject(subject.id);
+                  }
+                }}
+                className="p-2 bg-red-50 text-red-500 rounded-xl hover:bg-red-100 transition-colors"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
             </div>
-            <h3 className="text-lg font-bold text-slate-800 mb-1">{subject.name}</h3>
-            <p className="text-xs text-slate-500 font-medium">
-              Criada em {new Date(subject.createdAt).toLocaleDateString()}
-            </p>
+
+            <div className="flex items-center justify-between mb-6">
+              <div className="w-14 h-14 rounded-[1.25rem] flex items-center justify-center text-white shadow-xl transform group-hover:rotate-6 transition-transform" style={{ backgroundColor: subject.color }}>
+                <BookOpen className="w-7 h-7" />
+              </div>
+              <div className="text-right">
+                <span className="px-3 py-1 bg-slate-100 text-slate-500 text-[10px] font-black rounded-full uppercase tracking-widest">
+                  {terms.find(t => t.id === subject.termId)?.name || 'Sem Período'}
+                </span>
+              </div>
+            </div>
+
+            <h3 className="text-xl font-black text-slate-800 mb-2 group-hover:text-blue-600 transition-colors">{subject.name}</h3>
+            
+            <div className="flex items-center gap-2 text-xs text-slate-400 font-bold uppercase tracking-wider">
+              <Calendar className="w-3 h-3" />
+              Desde {new Date(subject.createdAt).toLocaleDateString()}
+            </div>
+
+            <div className="mt-6 pt-6 border-t border-slate-50 flex items-center justify-between">
+              <div className="flex -space-x-2">
+                {[1, 2, 3].map(i => (
+                  <div key={i} className="w-8 h-8 rounded-full border-2 border-white bg-slate-100 flex items-center justify-center text-[10px] font-bold text-slate-400">
+                    {i}
+                  </div>
+                ))}
+              </div>
+              <button className="text-blue-600 font-bold text-sm hover:underline">Ver Detalhes</button>
+            </div>
           </div>
         ))}
+
         {subjects.length === 0 && (
-          <div className="col-span-full py-12 text-center bg-white rounded-3xl border-2 border-dashed border-slate-200">
-            <BookOpen className="w-12 h-12 text-slate-300 mx-auto mb-4" />
-            <p className="text-slate-500 font-medium">Nenhuma disciplina cadastrada ainda.</p>
+          <div className="col-span-full py-20 text-center bg-white rounded-[3rem] border-4 border-dashed border-slate-100">
+            <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-6">
+              <BookOpen className="w-10 h-10 text-slate-300" />
+            </div>
+            <h3 className="text-xl font-bold text-slate-800 mb-2">Nenhuma disciplina ainda</h3>
+            <p className="text-slate-500 font-medium max-w-xs mx-auto mb-8">Comece adicionando as matérias que você está cursando neste período.</p>
+            <button 
+              onClick={onAddSubject}
+              className="px-8 py-4 bg-blue-600 text-white rounded-2xl font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-100"
+            >
+              Adicionar Primeira Disciplina
+            </button>
           </div>
         )}
       </div>
@@ -3225,77 +3308,6 @@ function RemindersView({ tasks }: { tasks: Task[] }) {
           </div>
         )}
       </div>
-    </div>
-  );
-}
-
-function AcademicSettingsView({ profileType, setProfileType, terms, onAddTerm }: { 
-  profileType: StudentProfileType, 
-  setProfileType: (type: StudentProfileType) => void,
-  terms: AcademicTerm[],
-  onAddTerm: () => void
-}) {
-  return (
-    <div className="space-y-8 max-w-2xl">
-      <section className="space-y-4">
-        <h2 className="text-xl font-bold text-slate-800">Tipo de Perfil Acadêmico</h2>
-        <div className="grid grid-cols-2 gap-4">
-          <button 
-            onClick={() => setProfileType('school')}
-            className={cn(
-              "p-6 rounded-3xl border-2 transition-all text-left space-y-2",
-              profileType === 'school' ? "border-blue-600 bg-blue-50" : "border-slate-100 bg-white hover:border-slate-200"
-            )}
-          >
-            <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center", profileType === 'school' ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-400")}>
-              <GraduationCap className="w-6 h-6" />
-            </div>
-            <h3 className="font-bold text-slate-800">Escolar</h3>
-            <p className="text-xs text-slate-500">Organizado por séries, anos ou bimestres.</p>
-          </button>
-          <button 
-            onClick={() => setProfileType('university')}
-            className={cn(
-              "p-6 rounded-3xl border-2 transition-all text-left space-y-2",
-              profileType === 'university' ? "border-blue-600 bg-blue-50" : "border-slate-100 bg-white hover:border-slate-200"
-            )}
-          >
-            <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center", profileType === 'university' ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-400")}>
-              <BookOpen className="w-6 h-6" />
-            </div>
-            <h3 className="font-bold text-slate-800">Universitário</h3>
-            <p className="text-xs text-slate-500">Organizado por semestres e créditos.</p>
-          </button>
-        </div>
-      </section>
-
-      <section className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-xl font-bold text-slate-800">Períodos Letivos</h2>
-          <button onClick={onAddTerm} className="text-blue-600 font-bold text-sm hover:underline flex items-center gap-1">
-            <Plus className="w-4 h-4" />
-            Adicionar Período
-          </button>
-        </div>
-        <div className="space-y-3">
-          {terms.map(term => (
-            <div key={term.id} className="bg-white p-4 rounded-2xl border border-slate-100 flex items-center justify-between">
-              <div>
-                <h3 className="font-bold text-slate-800">{term.name}</h3>
-                <p className="text-xs text-slate-500">
-                  {new Date(term.startDate).toLocaleDateString()} - {new Date(term.endDate).toLocaleDateString()}
-                </p>
-              </div>
-              {term.active && (
-                <span className="px-3 py-1 bg-green-100 text-green-700 text-[10px] font-bold rounded-full uppercase">Ativo</span>
-              )}
-            </div>
-          ))}
-          {terms.length === 0 && (
-            <p className="text-sm text-slate-500 italic">Nenhum período cadastrado.</p>
-          )}
-        </div>
-      </section>
     </div>
   );
 }
