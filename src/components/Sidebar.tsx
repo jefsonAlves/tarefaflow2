@@ -13,10 +13,11 @@ import {
   StickyNote,
   ChevronLeft,
   ChevronRight,
-  Plus
+  Plus,
+  ShieldCheck
 } from 'lucide-react';
 import { cn } from '../lib/utils';
-import { Subject, AcademicTerm, StudentProfileType } from '../types';
+import { Subject, AcademicTerm, StudentProfileType, UserProfile } from '../types';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -30,6 +31,7 @@ interface SidebarProps {
   setSelectedSubjectId: (id: string | null) => void;
   onAddSubject: () => void;
   onAddTerm: () => void;
+  userProfile: UserProfile | null;
 }
 
 export function Sidebar({ 
@@ -45,7 +47,8 @@ export function Sidebar({
   onAddSubject,
   onAddTerm,
   showInstallPrompt,
-  onInstallClick
+  onInstallClick,
+  userProfile
 }: SidebarProps & { showInstallPrompt?: boolean, onInstallClick?: () => void }) {
   
   const handleTabClick = (tab: string) => {
@@ -230,6 +233,23 @@ export function Sidebar({
               <Settings className="w-5 h-5" />
               {isOpen && <span className="truncate">Configurações</span>}
             </button>
+
+            {userProfile?.role_user === 'admin' && (
+              <button
+                onClick={() => handleTabClick('admin')}
+                className={cn(
+                  "w-full flex items-center rounded-xl font-medium transition-all group relative",
+                  isOpen ? "px-4 py-3 gap-3" : "p-3 justify-center",
+                  activeTab === 'admin'
+                    ? "bg-purple-50 text-purple-700"
+                    : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                )}
+                title={!isOpen ? "Painel Admin" : undefined}
+              >
+                <ShieldCheck className="w-5 h-5" />
+                {isOpen && <span className="truncate">Administração</span>}
+              </button>
+            )}
           </div>
         </div>
 

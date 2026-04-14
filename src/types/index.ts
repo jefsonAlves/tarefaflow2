@@ -15,7 +15,7 @@ export interface Notice {
   id: string;
   title: string;
   content: string;
-  type: 'info' | 'warning' | 'promo';
+  type: 'info' | 'warning' | 'promo' | 'urgent';
   active: boolean;
   createdAt: string;
   userId?: string; // If specific to a user
@@ -75,6 +75,7 @@ export interface Subject {
   termId: string | null;
   userId: string;
   createdAt: string;
+  reminderConfig?: ReminderConfig;
 }
 
 export interface UserProfile {

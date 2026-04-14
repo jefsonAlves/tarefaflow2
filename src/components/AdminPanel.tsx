@@ -19,7 +19,7 @@ interface AdminPanelProps {
   onRejectPayment: (requestId: string, userId: string) => void;
   onReleaseAccess: (userId: string) => void;
   onPauseAccess: (userId: string) => void;
-  onCreateNotice: (title: string, content: string, type: 'info' | 'warning' | 'promo') => void;
+  onCreateNotice: (title: string, content: string, type: 'info' | 'warning' | 'promo' | 'urgent') => void;
 }
 
 export const AdminPanel: React.FC<AdminPanelProps> = ({
@@ -33,7 +33,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 }) => {
   const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<'dashboard' | 'users' | 'payments' | 'plans' | 'features' | 'notices'>('dashboard');
-  const [newNotice, setNewNotice] = useState({ title: '', content: '', type: 'info' as 'info' | 'warning' | 'promo' });
+  const [newNotice, setNewNotice] = useState({ title: '', content: '', type: 'info' as 'info' | 'warning' | 'promo' | 'urgent' });
 
   const handleCreateNotice = () => {
     if (!newNotice.title || !newNotice.content) return;
@@ -258,7 +258,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                     className="w-full px-4 py-2 bg-white border border-slate-200 rounded-xl focus:border-blue-500 outline-none"
                   >
                     <option value="info">Informação</option>
-                    <option value="warning">Aviso/Urgente</option>
+                    <option value="warning">Aviso</option>
+                    <option value="urgent">Urgente</option>
                     <option value="promo">Promoção/Novidade</option>
                   </select>
                 </div>

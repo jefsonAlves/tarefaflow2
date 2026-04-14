@@ -27,7 +27,9 @@ import {
   BookOpen,
   StickyNote,
   Download,
-  Trash2
+  Trash2,
+  Zap,
+  Info
 } from 'lucide-react';
 import { cn, formatDate } from './lib/utils';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
@@ -171,6 +173,16 @@ export default function App() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [userRole, setUserRole] = useState<'student' | 'teacher'>('student');
   
+  const dueSoonTasks = useMemo(() => {
+    const now = new Date();
+    const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+    return tasks.filter(task => {
+      if (!task.dueDate || task.status === 'done' || task.completed) return false;
+      const dueDate = new Date(task.dueDate);
+      return dueDate > now && dueDate <= tomorrow;
+    });
+  }, [tasks]);
+
   const handleLogout = async () => {
     await logout();
     sessionStorage.removeItem('google_access_token');
@@ -453,7 +465,13 @@ export default function App() {
             await setDoc(userDocRef, newProfile);
             setUserProfile(newProfile);
           } else {
-            setUserProfile(userDocSnap.data() as UserProfile);
+            const data = userDocSnap.data() as UserProfile;
+            // Force admin role if email matches but role is not admin
+            if ((u.email?.toLowerCase() === 'jefson.s.a7@gmail.com' || u.email?.toLowerCase() === 'jefson.ti@gmail.com') && data.role_user !== 'admin') {
+              await updateDoc(userDocRef, { role_user: 'admin' });
+              data.role_user = 'admin';
+            }
+            setUserProfile(data);
           }
         } catch (error: any) {
           console.error("Error fetching/creating user profile:", error);
@@ -1022,7 +1040,7 @@ export default function App() {
   const [showTermModal, setShowTermModal] = useState(false);
   const [showNoteModal, setShowNoteModal] = useState(false);
 
-  const addSubject = async (name: string, color: string, termId?: string) => {
+  const addSubject = async (name: string, color: string, termId?: string, reminderConfig?: ReminderConfig) => {
     if (!user) return;
     try {
       await addDoc(collection(db, 'subjects'), {
@@ -1030,7 +1048,8 @@ export default function App() {
         color,
         termId: termId || null,
         userId: user.uid,
-        createdAt: new Date().toISOString()
+        createdAt: new Date().toISOString(),
+        reminderConfig: reminderConfig || null
       });
       setShowSubjectModal(false);
     } catch (e) {
@@ -1698,10 +1717,32 @@ export default function App() {
         onAddTerm={() => setShowTermModal(true)}
         showInstallPrompt={showInstallPrompt}
         onInstallClick={handleInstallClick}
+        userProfile={userProfile}
       />
 
       <main className="flex-1 overflow-x-hidden lg:pb-8">
         <div className="max-w-7xl mx-auto p-4 lg:p-8 w-full">
+          {/* Payment Banner */}
+          <PaymentBanner 
+            userProfile={userProfile} 
+            onPay={() => setActiveTab('settings')} 
+          />
+
+          {/* Due Soon Banner */}
+          <DueSoonBanner 
+            tasks={dueSoonTasks} 
+            onAction={() => setActiveTab('tasks')} 
+          />
+
+          {/* Notices Banner */}
+          <NoticeBanner 
+            notices={notices.filter(n => {
+              const seen = JSON.parse(localStorage.getItem(`seen_notices_${user?.uid}`) || '[]');
+              return !seen.includes(n.id);
+            })} 
+            onDismiss={markNoticeAsSeen} 
+          />
+
           {/* Header */}
         {(isSyncing || isSyncingTasks) && (
           <motion.div 
@@ -1956,7 +1997,7 @@ export default function App() {
             ) : activeTab === 'notes' ? (
               <NotesView notes={notes} subjects={subjects} onAddNote={() => setShowNoteModal(true)} />
             ) : activeTab === 'reminders' ? (
-              <RemindersView tasks={tasks.filter(t => t.reminderConfig)} />
+              <RemindersView tasks={tasks.filter(t => t.reminderConfig)} subjects={subjects} />
             ) : activeTab === 'settings' ? (
               <SettingsView 
                 userProfile={userProfile} 
@@ -3371,11 +3412,43 @@ function NotesView({ notes, subjects, onAddNote }: { notes: Note[], subjects: Su
   );
 }
 
-function RemindersView({ tasks }: { tasks: Task[] }) {
+function RemindersView({ tasks, subjects }: { tasks: Task[], subjects: Subject[] }) {
+  const subjectReminders = subjects.filter(s => s.reminderConfig);
+
   return (
     <div className="space-y-6">
       <h2 className="text-xl font-bold text-slate-800">Lembretes Ativos</h2>
+      
       <div className="space-y-3">
+        {/* Subject Reminders */}
+        {subjectReminders.map(subject => (
+          <div key={subject.id} className="bg-indigo-50 p-4 rounded-2xl shadow-sm border border-indigo-100 flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="w-10 h-10 bg-indigo-100 rounded-xl flex items-center justify-center">
+                <BookOpen className="w-5 h-5 text-indigo-600" />
+              </div>
+              <div>
+                <h3 className="font-bold text-indigo-900 text-sm">Estudar: {subject.name}</h3>
+                <div className="flex items-center gap-2 text-xs text-indigo-600/70">
+                  <Clock className="w-3 h-3" />
+                  <span>Horário: {subject.reminderConfig?.time}</span>
+                  <span className="px-2 py-0.5 bg-indigo-100 rounded-full text-[10px] font-bold uppercase">
+                    Disciplina
+                  </span>
+                </div>
+              </div>
+            </div>
+            <div className="flex gap-1">
+              {subject.reminderConfig?.daysOfWeek?.map(d => (
+                <span key={d} className="w-5 h-5 flex items-center justify-center bg-white text-[8px] font-bold rounded-md text-indigo-600 border border-indigo-100">
+                  {['D', 'S', 'T', 'Q', 'Q', 'S', 'S'][d]}
+                </span>
+              ))}
+            </div>
+          </div>
+        ))}
+
+        {/* Task Reminders */}
         {tasks.map(task => (
           <div key={task.id} className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex items-center justify-between">
             <div className="flex items-center gap-4">
@@ -3398,7 +3471,8 @@ function RemindersView({ tasks }: { tasks: Task[] }) {
             </button>
           </div>
         ))}
-        {tasks.length === 0 && (
+
+        {tasks.length === 0 && subjectReminders.length === 0 && (
           <div className="py-12 text-center bg-white rounded-3xl border-2 border-dashed border-slate-200">
             <Bell className="w-12 h-12 text-slate-300 mx-auto mb-4" />
             <p className="text-slate-500 font-medium">Nenhum lembrete configurado.</p>
@@ -3411,19 +3485,40 @@ function RemindersView({ tasks }: { tasks: Task[] }) {
 
 // --- Modals ---
 
-function CreateSubjectModal({ onClose, onSave, terms }: { onClose: () => void, onSave: (name: string, color: string, termId?: string) => void, terms: AcademicTerm[] }) {
+function CreateSubjectModal({ onClose, onSave, terms }: { onClose: () => void, onSave: (name: string, color: string, termId?: string, reminderConfig?: ReminderConfig) => void, terms: AcademicTerm[] }) {
   const [name, setName] = useState('');
   const [color, setColor] = useState('#3b82f6');
   const [termId, setTermId] = useState('');
+  
+  // Subject Reminders
+  const [hasReminder, setHasReminder] = useState(false);
+  const [reminderTime, setReminderTime] = useState('14:00');
+  const [daysOfWeek, setDaysOfWeek] = useState<number[]>([1, 2, 3, 4, 5]);
 
   const colors = ['#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4', '#f97316'];
+
+  const handleSave = () => {
+    let reminderConfig: ReminderConfig | undefined;
+    if (hasReminder) {
+      reminderConfig = {
+        type: 'recurring',
+        time: reminderTime,
+        daysOfWeek,
+        intervalMinutes: 0,
+        repeatUntilAcknowledged: false,
+        repeatCount: 0,
+        nextReminder: new Date().toISOString() // Will be recalculated by the background logic
+      };
+    }
+    onSave(name, color, termId, reminderConfig);
+  };
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
       <motion.div 
         initial={{ opacity: 0, scale: 0.9 }}
         animate={{ opacity: 1, scale: 1 }}
-        className="bg-white rounded-[32px] p-8 max-w-md w-full shadow-2xl space-y-6"
+        className="bg-white rounded-[32px] p-8 max-w-md w-full shadow-2xl space-y-6 overflow-y-auto max-h-[90vh] no-scrollbar"
       >
         <div className="flex items-center justify-between">
           <h2 className="text-2xl font-bold text-slate-900">Nova Disciplina</h2>
@@ -3474,16 +3569,210 @@ function CreateSubjectModal({ onClose, onSave, terms }: { onClose: () => void, o
               ))}
             </div>
           </div>
+
+          <div className="pt-4 border-t border-slate-100 space-y-4">
+            <div className="flex items-center justify-between">
+              <label className="text-sm font-bold text-slate-700 flex items-center gap-2">
+                <Bell className="w-4 h-4 text-blue-600" />
+                Lembrete de Estudo
+              </label>
+              <button 
+                onClick={() => setHasReminder(!hasReminder)}
+                className={cn(
+                  "w-12 h-6 rounded-full transition-all relative",
+                  hasReminder ? "bg-blue-600" : "bg-slate-200"
+                )}
+              >
+                <div className={cn(
+                  "absolute top-1 w-4 h-4 bg-white rounded-full transition-all",
+                  hasReminder ? "left-7" : "left-1"
+                )} />
+              </button>
+            </div>
+
+            {hasReminder && (
+              <motion.div 
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                className="space-y-4 bg-slate-50 p-4 rounded-2xl"
+              >
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-slate-600 uppercase">Dias para Estudar</label>
+                  <div className="flex flex-wrap gap-2">
+                    {['D', 'S', 'T', 'Q', 'Q', 'S', 'S'].map((day, i) => (
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={() => setDaysOfWeek(prev => prev.includes(i) ? prev.filter(d => d !== i) : [...prev, i])}
+                        className={cn(
+                          "w-8 h-8 rounded-lg text-xs font-bold border transition-all",
+                          daysOfWeek.includes(i) ? "bg-blue-600 border-blue-600 text-white" : "bg-white border-slate-200 text-slate-400"
+                        )}
+                      >
+                        {day}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-600 uppercase">Horário</label>
+                  <input 
+                    type="time" 
+                    value={reminderTime}
+                    onChange={(e) => setReminderTime(e.target.value)}
+                    className="bg-white border border-slate-200 rounded-lg px-2 py-1 text-sm outline-none focus:border-blue-500"
+                  />
+                </div>
+              </motion.div>
+            )}
+          </div>
         </div>
 
         <button 
-          onClick={() => onSave(name, color, termId)}
+          onClick={handleSave}
           disabled={!name}
           className="w-full py-4 bg-blue-600 text-white rounded-2xl font-bold text-lg shadow-lg shadow-blue-200 hover:bg-blue-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
         >
           Criar Disciplina
         </button>
       </motion.div>
+    </div>
+  );
+}
+
+function PaymentBanner({ userProfile, onPay }: { userProfile: UserProfile | null, onPay: () => void }) {
+  if (!userProfile) return null;
+  
+  const isTrialing = userProfile.subscriptionStatus === 'trialing';
+  const isExpired = userProfile.subscriptionStatus === 'expired';
+  const isPending = userProfile.subscriptionStatus === 'pending_approval';
+  
+  if (!isTrialing && !isExpired && !isPending) return null;
+
+  let message = "";
+  let buttonText = "Assinar Agora";
+  let type: 'warning' | 'error' | 'info' = 'info';
+
+  if (isTrialing) {
+    const endsAt = new Date(userProfile.trialEndsAt || '');
+    const now = new Date();
+    const diffDays = Math.ceil((endsAt.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+    if (diffDays > 5) return null; // Only show if less than 5 days left
+    message = `Seu período de teste termina em ${diffDays} dias. Assine para não perder o acesso!`;
+    type = 'warning';
+  } else if (isExpired) {
+    message = "Sua assinatura expirou. Renove agora para continuar usando todas as ferramentas.";
+    buttonText = "Renovar Assinatura";
+    type = 'error';
+  } else if (isPending) {
+    message = "Seu pagamento está em análise. Você terá acesso total em breve!";
+    buttonText = "Ver Status";
+    type = 'info';
+  }
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: -20 }}
+      animate={{ opacity: 1, y: 0 }}
+      className={cn(
+        "mb-6 p-4 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4 shadow-lg",
+        type === 'error' ? "bg-red-600 text-white shadow-red-100" :
+        type === 'warning' ? "bg-amber-500 text-white shadow-amber-100" :
+        "bg-blue-600 text-white shadow-blue-100"
+      )}
+    >
+      <div className="flex items-center gap-3 text-center sm:text-left">
+        <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center shrink-0">
+          <Zap className="w-6 h-6" />
+        </div>
+        <div>
+          <p className="font-bold">{message}</p>
+        </div>
+      </div>
+      <button 
+        onClick={onPay}
+        className="px-6 py-2 bg-white text-slate-900 rounded-xl font-bold text-sm hover:bg-slate-50 transition-all whitespace-nowrap"
+      >
+        {buttonText}
+      </button>
+    </motion.div>
+  );
+}
+
+function DueSoonBanner({ tasks, onAction }: { tasks: Task[], onAction: () => void }) {
+  if (tasks.length === 0) return null;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: -20 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="mb-6 bg-amber-50 border border-amber-200 p-4 rounded-2xl shadow-sm"
+    >
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 bg-amber-100 rounded-xl flex items-center justify-center shrink-0">
+            <Clock className="w-6 h-6 text-amber-600" />
+          </div>
+          <div>
+            <h3 className="text-sm font-bold text-amber-900">Atenção: Prazos Próximos</h3>
+            <p className="text-xs text-amber-700">
+              Você tem {tasks.length} {tasks.length === 1 ? 'tarefa que vence' : 'tarefas que vencem'} em menos de 24 horas.
+            </p>
+          </div>
+        </div>
+        <button 
+          onClick={onAction}
+          className="px-4 py-2 bg-amber-600 text-white rounded-xl font-bold text-xs hover:bg-amber-700 transition-all whitespace-nowrap"
+        >
+          Ver Tarefas
+        </button>
+      </div>
+    </motion.div>
+  );
+}
+
+function NoticeBanner({ notices, onDismiss }: { notices: Notice[], onDismiss: (id: string) => void }) {
+  if (notices.length === 0) return null;
+
+  return (
+    <div className="space-y-2 mb-6">
+      {notices.map(notice => (
+        <motion.div
+          key={notice.id}
+          initial={{ opacity: 0, height: 0 }}
+          animate={{ opacity: 1, height: 'auto' }}
+          exit={{ opacity: 0, height: 0 }}
+          className={cn(
+            "p-3 rounded-xl flex items-center justify-between gap-4 shadow-sm border",
+            notice.type === 'urgent' || notice.type === 'warning' ? "bg-red-50 border-red-100 text-red-800" :
+            notice.type === 'promo' ? "bg-purple-50 border-purple-100 text-purple-800" :
+            "bg-blue-50 border-blue-100 text-blue-800"
+          )}
+        >
+          <div className="flex items-center gap-3">
+            <div className={cn(
+              "w-8 h-8 rounded-lg flex items-center justify-center shrink-0",
+              notice.type === 'urgent' || notice.type === 'warning' ? "bg-red-100" :
+              notice.type === 'promo' ? "bg-purple-100" :
+              "bg-blue-100"
+            )}>
+              {notice.type === 'urgent' || notice.type === 'warning' ? <AlertCircle className="w-4 h-4" /> :
+               notice.type === 'promo' ? <Zap className="w-4 h-4" /> :
+               <Info className="w-4 h-4" />}
+            </div>
+            <div>
+              <p className="text-sm font-bold">{notice.title}</p>
+              <p className="text-xs opacity-80">{notice.content}</p>
+            </div>
+          </div>
+          <button 
+            onClick={() => onDismiss(notice.id)}
+            className="p-1 hover:bg-black/5 rounded-lg transition-colors"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </motion.div>
+      ))}
     </div>
   );
 }
