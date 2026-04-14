@@ -43,8 +43,10 @@ export function Sidebar({
   selectedSubjectId,
   setSelectedSubjectId,
   onAddSubject,
-  onAddTerm
-}: SidebarProps) {
+  onAddTerm,
+  showInstallPrompt,
+  onInstallClick
+}: SidebarProps & { showInstallPrompt?: boolean, onInstallClick?: () => void }) {
   
   const handleTabClick = (tab: string) => {
     setActiveTab(tab);
@@ -92,7 +94,7 @@ export function Sidebar({
                 exit={{ opacity: 0, x: -10 }}
                 className="flex items-center gap-3 overflow-hidden"
               >
-                <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white font-bold shadow-lg shadow-blue-200 shrink-0">
+                <div className="w-10 h-10 bg-gradient-to-br from-pink-400 via-blue-500 to-yellow-400 rounded-xl flex items-center justify-center text-white font-bold shadow-lg shadow-blue-100 shrink-0">
                   <GraduationCap className="w-6 h-6" />
                 </div>
                 <div className="truncate">
@@ -108,7 +110,7 @@ export function Sidebar({
                 initial={{ opacity: 0, scale: 0.8 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.8 }}
-                className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white font-bold shadow-lg shadow-blue-200 mx-auto"
+                className="w-10 h-10 bg-gradient-to-br from-pink-400 via-blue-500 to-yellow-400 rounded-xl flex items-center justify-center text-white font-bold shadow-lg shadow-blue-100 mx-auto"
               >
                 <GraduationCap className="w-6 h-6" />
               </motion.div>
@@ -131,6 +133,21 @@ export function Sidebar({
         </div>
 
         <div className="flex-1 overflow-y-auto no-scrollbar py-4">
+          {showInstallPrompt && (
+            <div className="px-4 mb-4">
+              <button
+                onClick={onInstallClick}
+                className={cn(
+                  "w-full bg-blue-600 text-white rounded-xl font-bold transition-all flex items-center gap-2 shadow-lg shadow-blue-100",
+                  isOpen ? "px-4 py-3 text-sm" : "p-3 justify-center"
+                )}
+              >
+                <Plus className="w-5 h-5" />
+                {isOpen && <span>Instalar App</span>}
+              </button>
+            </div>
+          )}
+
           <div className="px-3 space-y-1 mb-6">
             {isOpen && <p className="px-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Menu</p>}
             {[

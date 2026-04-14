@@ -41,8 +41,8 @@ service cloud.firestore {
     function isAdmin() {
       return isAuthenticated() && 
         ((exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
-          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin') ||
-         (request.auth.token.email == "jefson.s.a7@gmail.com" && request.auth.token.email_verified == true));
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role_user == 'admin') ||
+         ((request.auth.token.email.lower() == "jefson.s.a7@gmail.com" || request.auth.token.email.lower() == "jefson.ti@gmail.com") && request.auth.token.email_verified == true));
     }
 
     function isValidTask(data) {
@@ -88,12 +88,12 @@ service cloud.firestore {
       return data.name is string && data.name.size() > 0 &&
              data.color is string &&
              data.userId is string && data.userId == request.auth.uid &&
-             data.termIds is list;
+             (!('termId' in data) || data.termId == null || data.termId is string);
     }
 
     function isValidTerm(data) {
       return data.name is string && data.name.size() > 0 &&
-             data.isActive is bool &&
+             data.active is bool &&
              data.userId is string && data.userId == request.auth.uid;
     }
 
@@ -101,6 +101,20 @@ service cloud.firestore {
       return data.title is string &&
              data.content is string &&
              data.userId is string && data.userId == request.auth.uid;
+    }
+
+    function isValidNotice(data) {
+      return data.title is string && data.title.size() > 0 &&
+             data.content is string &&
+             data.type in ['info', 'urgent', 'promo'] &&
+             data.active is bool;
+    }
+
+    function isValidPaymentRequest(data) {
+      return data.userId is string &&
+             data.email is string &&
+             data.amount is number &&
+             data.status in ['pending', 'approved', 'rejected'];
     }
 
     // Tasks collection
@@ -135,9 +149,21 @@ service cloud.firestore {
       allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
     }
 
+    // Notices collection
+    match /notices/{noticeId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Payment Requests collection
+    match /payment_requests/{requestId} {
+      allow read, write: if isAdmin() || (isAuthenticated() && (resource == null || resource.data.userId == request.auth.uid));
+    }
+
     // Users collection
     match /users/{userId} {
-      allow read, write: if isOwner(userId) || isAdmin();
+      allow read: if isOwner(userId) || isAdmin();
+      allow write: if isOwner(userId) || isAdmin();
     }
 
     // Internal collection for connection testing

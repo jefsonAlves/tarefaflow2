@@ -1,12 +1,24 @@
 export type TaskStatus = 'todo' | 'in-progress' | 'done' | 'archived' | 'pending' | 'completed';
 
 export interface ReminderConfig {
-  type: 'once' | 'repeated' | 'nagging' | 'progressive';
+  type: 'once' | 'repeated' | 'nagging' | 'progressive' | 'recurring';
   intervalMinutes: number;
   nextReminder: string;
+  time?: string; // HH:mm
+  daysOfWeek?: number[]; // 0-6
   progressiveStepMinutes?: number;
   repeatCount?: number;
   repeatUntilAcknowledged?: boolean;
+}
+
+export interface Notice {
+  id: string;
+  title: string;
+  content: string;
+  type: 'info' | 'warning' | 'promo';
+  active: boolean;
+  createdAt: string;
+  userId?: string; // If specific to a user
 }
 
 export interface Task {

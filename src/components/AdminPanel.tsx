@@ -19,6 +19,7 @@ interface AdminPanelProps {
   onRejectPayment: (requestId: string, userId: string) => void;
   onReleaseAccess: (userId: string) => void;
   onPauseAccess: (userId: string) => void;
+  onCreateNotice: (title: string, content: string, type: 'info' | 'warning' | 'promo') => void;
 }
 
 export const AdminPanel: React.FC<AdminPanelProps> = ({
@@ -27,10 +28,18 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   onApprovePayment,
   onRejectPayment,
   onReleaseAccess,
-  onPauseAccess
+  onPauseAccess,
+  onCreateNotice
 }) => {
   const { t } = useTranslation();
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'users' | 'payments' | 'plans' | 'features'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'users' | 'payments' | 'plans' | 'features' | 'notices'>('dashboard');
+  const [newNotice, setNewNotice] = useState({ title: '', content: '', type: 'info' as 'info' | 'warning' | 'promo' });
+
+  const handleCreateNotice = () => {
+    if (!newNotice.title || !newNotice.content) return;
+    onCreateNotice(newNotice.title, newNotice.content, newNotice.type);
+    setNewNotice({ title: '', content: '', type: 'info' });
+  };
 
   return (
     <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
@@ -70,6 +79,16 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 {paymentRequests.filter(r => r.status === 'pending').length}
               </span>
             )}
+          </button>
+          <button
+            onClick={() => setActiveTab('notices')}
+            className={`py-4 px-1 border-b-2 font-medium text-sm ${
+              activeTab === 'notices'
+                ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
+            }`}
+          >
+            Avisos
           </button>
           <button
             onClick={() => setActiveTab('plans')}
@@ -204,6 +223,53 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 </div>
               ))
             )}
+          </div>
+        )}
+        {activeTab === 'notices' && (
+          <div className="space-y-6">
+            <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200">
+              <h3 className="font-bold text-slate-800 mb-4">Criar Novo Aviso</h3>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Título</label>
+                  <input 
+                    type="text" 
+                    value={newNotice.title}
+                    onChange={(e) => setNewNotice({ ...newNotice, title: e.target.value })}
+                    className="w-full px-4 py-2 bg-white border border-slate-200 rounded-xl focus:border-blue-500 outline-none" 
+                    placeholder="Ex: Manutenção Programada"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Conteúdo</label>
+                  <textarea 
+                    value={newNotice.content}
+                    onChange={(e) => setNewNotice({ ...newNotice, content: e.target.value })}
+                    className="w-full px-4 py-2 bg-white border border-slate-200 rounded-xl focus:border-blue-500 outline-none resize-none" 
+                    rows={3} 
+                    placeholder="Descreva o aviso aqui..."
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Tipo</label>
+                  <select 
+                    value={newNotice.type}
+                    onChange={(e) => setNewNotice({ ...newNotice, type: e.target.value as any })}
+                    className="w-full px-4 py-2 bg-white border border-slate-200 rounded-xl focus:border-blue-500 outline-none"
+                  >
+                    <option value="info">Informação</option>
+                    <option value="warning">Aviso/Urgente</option>
+                    <option value="promo">Promoção/Novidade</option>
+                  </select>
+                </div>
+                <button 
+                  onClick={handleCreateNotice}
+                  className="w-full py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-all"
+                >
+                  Publicar Aviso
+                </button>
+              </div>
+            </div>
           </div>
         )}
         {activeTab === 'plans' && (

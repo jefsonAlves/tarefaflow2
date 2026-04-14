@@ -145,7 +145,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
   }
 }
 
-import { Task, TaskStatus, ReminderConfig, StudentProfileType, AcademicTerm, Subject, UserProfile, Note } from './types';
+import { Task, TaskStatus, ReminderConfig, StudentProfileType, AcademicTerm, Subject, UserProfile, Note, Notice } from './types';
 
 import { Sidebar } from './components/Sidebar';
 import { TaskActionMenu } from './components/TaskActionMenu';
@@ -288,6 +288,37 @@ export default function App() {
   // Admin State
   const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
   const [paymentRequests, setPaymentRequests] = useState<any[]>([]);
+  const [notices, setNotices] = useState<Notice[]>([]);
+  const [activeNotice, setActiveNotice] = useState<Notice | null>(null);
+
+  useEffect(() => {
+    const unsubNotices = onSnapshot(query(collection(db, 'notices'), where('active', '==', true)), (snapshot) => {
+      const activeNotices = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Notice));
+      setNotices(activeNotices);
+      
+      // Show the most recent notice if not seen yet
+      if (activeNotices.length > 0 && user) {
+        const seenNotices = JSON.parse(localStorage.getItem(`seen_notices_${user.uid}`) || '[]');
+        const unseen = activeNotices.filter(n => !seenNotices.includes(n.id));
+        if (unseen.length > 0) {
+          setActiveNotice(unseen[0]);
+        }
+      }
+    }, (error) => {
+      console.error("Error listening to notices:", error);
+      // Don't throw here to avoid crashing the app for a non-critical feature
+    });
+    return () => unsubNotices();
+  }, [user]);
+
+  const markNoticeAsSeen = (id: string) => {
+    if (!user) return;
+    const seenNotices = JSON.parse(localStorage.getItem(`seen_notices_${user.uid}`) || '[]');
+    if (!seenNotices.includes(id)) {
+      localStorage.setItem(`seen_notices_${user.uid}`, JSON.stringify([...seenNotices, id]));
+    }
+    setActiveNotice(null);
+  };
 
   useEffect(() => {
     const handleBeforeInstallPrompt = (e: Event) => {
@@ -413,7 +444,7 @@ export default function App() {
               email: u.email || '',
               displayName: u.displayName || '',
               photoURL: u.photoURL || '',
-              role_user: (u.email === 'jefson.s.a7@gmail.com' || u.email === 'Jefson.ti@gmail.com') ? 'admin' : 'user',
+              role_user: (u.email?.toLowerCase() === 'jefson.s.a7@gmail.com' || u.email?.toLowerCase() === 'jefson.ti@gmail.com') ? 'admin' : 'user',
               subscriptionStatus: 'trialing',
               trialStartAt: new Date().toISOString(),
               trialEndsAt: new Date(Date.now() + 25 * 24 * 60 * 60 * 1000).toISOString(),
@@ -463,9 +494,13 @@ export default function App() {
     if (userProfile?.role_user === 'admin') {
       const unsubUsers = onSnapshot(collection(db, 'users'), (snapshot) => {
         setAllUsers(snapshot.docs.map(d => d.data() as UserProfile));
+      }, (error) => {
+        handleFirestoreError(error, OperationType.GET, 'users');
       });
       const unsubPayments = onSnapshot(collection(db, 'payment_requests'), (snapshot) => {
         setPaymentRequests(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+      }, (error) => {
+        handleFirestoreError(error, OperationType.GET, 'payment_requests');
       });
       return () => {
         unsubUsers();
@@ -1661,6 +1696,8 @@ export default function App() {
         setSelectedSubjectId={setSelectedSubjectId}
         onAddSubject={() => setShowSubjectModal(true)}
         onAddTerm={() => setShowTermModal(true)}
+        showInstallPrompt={showInstallPrompt}
+        onInstallClick={handleInstallClick}
       />
 
       <main className="flex-1 overflow-x-hidden lg:pb-8">
@@ -1960,6 +1997,18 @@ export default function App() {
                     await updateDoc(doc(db, 'users', userId), { isReleased: false, subscriptionStatus: 'paused' });
                   } catch (e) { console.error(e); }
                 }}
+                onCreateNotice={async (title, content, type) => {
+                  try {
+                    await addDoc(collection(db, 'notices'), {
+                      title,
+                      content,
+                      type,
+                      active: true,
+                      createdAt: new Date().toISOString()
+                    });
+                    showToast('Aviso publicado com sucesso!', 'success');
+                  } catch (e) { console.error(e); }
+                }}
               />
             ) : (
               <SubjectsView 
@@ -2055,6 +2104,15 @@ export default function App() {
       </AnimatePresence>
 
       {/* Diagnostics Panel */}
+      <AnimatePresence>
+        {activeNotice && (
+          <NoticeModal 
+            notice={activeNotice} 
+            onClose={() => markNoticeAsSeen(activeNotice.id)} 
+          />
+        )}
+      </AnimatePresence>
+
       <AnimatePresence>
         {showDiagnostics && (
           <DiagnosticsPanel 
@@ -2728,6 +2786,14 @@ function TaskCard({ task, subjects, onToggle, onDelete, onMove }: { task: Task, 
             </span>
           )}
 
+          {task.reminderConfig && (
+            <span className="text-[10px] bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
+              <Bell className="w-3 h-3" />
+              {task.reminderConfig.type === 'recurring' ? 'Recorrente' : 'Lembrete'}
+              {task.reminderConfig.time && ` às ${task.reminderConfig.time}`}
+            </span>
+          )}
+
           {task.role === 'teacher' && task.submissionCount && (
             <span className="text-[10px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
               <CheckCircle2 className="w-3 h-3" />
@@ -2799,10 +2865,12 @@ function CreateTaskModal({ onClose, userId, categories, setCategories, onTaskCre
   const [showAddCat, setShowAddCat] = useState(false);
   
   // Advanced Reminders
-  const [reminderType, setReminderType] = useState<'once' | 'repeated' | 'nagging' | 'progressive'>('once');
+  const [reminderType, setReminderType] = useState<'once' | 'repeated' | 'nagging' | 'progressive' | 'recurring'>('once');
   const [interval, setInterval] = useState(15);
   const [repeatUntilAck, setRepeatUntilAck] = useState(false);
   const [progressiveStep, setProgressiveStep] = useState(5);
+  const [reminderTime, setReminderTime] = useState('');
+  const [daysOfWeek, setDaysOfWeek] = useState<number[]>([1, 2, 3, 4, 5]); // Default weekdays
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -2830,6 +2898,8 @@ function CreateTaskModal({ onClose, userId, categories, setCategories, onTaskCre
           nextReminder: reminderType === 'once' ? new Date(date).toISOString() : new Date(new Date(date).getTime() - interval * 60000).toISOString(),
           repeatUntilAcknowledged: repeatUntilAck,
           repeatCount: 0,
+          time: reminderTime || null,
+          daysOfWeek: reminderType === 'recurring' ? daysOfWeek : null,
           ...(reminderType === 'progressive' ? { progressiveStepMinutes: progressiveStep } : {})
         }
       };
@@ -2982,14 +3052,14 @@ function CreateTaskModal({ onClose, userId, categories, setCategories, onTaskCre
                 onClick={() => setReminderType('once')}
                 className={cn("p-3 rounded-xl text-xs font-bold border-2 transition-all", reminderType === 'once' ? "bg-blue-600 border-blue-600 text-white" : "bg-white border-slate-200 text-slate-500")}
               >
-                Uma vez
+                Único
               </button>
               <button 
                 type="button"
-                onClick={() => setReminderType('repeated')}
-                className={cn("p-3 rounded-xl text-xs font-bold border-2 transition-all", reminderType === 'repeated' ? "bg-blue-600 border-blue-600 text-white" : "bg-white border-slate-200 text-slate-500")}
+                onClick={() => setReminderType('recurring')}
+                className={cn("p-3 rounded-xl text-xs font-bold border-2 transition-all", reminderType === 'recurring' ? "bg-blue-600 border-blue-600 text-white" : "bg-white border-slate-200 text-slate-500")}
               >
-                Repetir
+                Recorrente
               </button>
               <button 
                 type="button"
@@ -3007,7 +3077,34 @@ function CreateTaskModal({ onClose, userId, categories, setCategories, onTaskCre
               </button>
             </div>
 
-            {reminderType !== 'once' && (
+            {reminderType === 'recurring' && (
+              <div className="space-y-3 pt-2">
+                <label className="text-xs font-bold text-slate-600">Dias da Semana</label>
+                <div className="flex flex-wrap gap-2">
+                  {['D', 'S', 'T', 'Q', 'Q', 'S', 'S'].map((day, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => setDaysOfWeek(prev => prev.includes(i) ? prev.filter(d => d !== i) : [...prev, i])}
+                      className={cn("w-8 h-8 rounded-lg text-xs font-bold border transition-all", daysOfWeek.includes(i) ? "bg-blue-600 border-blue-600 text-white" : "bg-white border-slate-200 text-slate-400")}
+                    >
+                      {day}
+                    </button>
+                  ))}
+                </div>
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-600">Horário do Lembrete</label>
+                  <input 
+                    type="time" 
+                    value={reminderTime}
+                    onChange={(e) => setReminderTime(e.target.value)}
+                    className="bg-white border border-slate-200 rounded-lg px-2 py-1 text-sm outline-none focus:border-blue-500"
+                  />
+                </div>
+              </div>
+            )}
+
+            {reminderType !== 'once' && reminderType !== 'recurring' && (
               <div className="space-y-3 pt-2">
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-bold text-slate-600">Intervalo (minutos)</label>
@@ -3385,6 +3482,66 @@ function CreateSubjectModal({ onClose, onSave, terms }: { onClose: () => void, o
           className="w-full py-4 bg-blue-600 text-white rounded-2xl font-bold text-lg shadow-lg shadow-blue-200 hover:bg-blue-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
         >
           Criar Disciplina
+        </button>
+      </motion.div>
+    </div>
+  );
+}
+
+function NoticeModal({ notice, onClose }: { notice: Notice, onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.9, y: 20 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.9, y: 20 }}
+        className="bg-white rounded-[32px] p-8 max-w-md w-full shadow-2xl space-y-6 relative overflow-hidden"
+      >
+        {notice.type === 'promo' && (
+          <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-purple-500 via-pink-500 to-red-500" />
+        )}
+        {notice.type === 'warning' && (
+          <div className="absolute top-0 left-0 w-full h-2 bg-amber-500" />
+        )}
+        
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            {notice.type === 'promo' ? (
+              <div className="p-2 bg-purple-100 rounded-xl">
+                <Plus className="w-5 h-5 text-purple-600" />
+              </div>
+            ) : notice.type === 'warning' ? (
+              <div className="p-2 bg-amber-100 rounded-xl">
+                <AlertCircle className="w-5 h-5 text-amber-600" />
+              </div>
+            ) : (
+              <div className="p-2 bg-blue-100 rounded-xl">
+                <Bell className="w-5 h-5 text-blue-600" />
+              </div>
+            )}
+            <h2 className="text-xl font-bold text-slate-900">{notice.title}</h2>
+          </div>
+          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-xl transition-colors">
+            <X className="w-5 h-5 text-slate-400" />
+          </button>
+        </div>
+
+        <div className="space-y-4">
+          <p className="text-slate-600 leading-relaxed whitespace-pre-wrap">
+            {notice.content}
+          </p>
+        </div>
+
+        <button 
+          onClick={onClose}
+          className={cn(
+            "w-full py-4 rounded-2xl font-bold text-lg shadow-lg transition-all",
+            notice.type === 'promo' ? "bg-purple-600 text-white shadow-purple-100 hover:bg-purple-700" :
+            notice.type === 'warning' ? "bg-amber-600 text-white shadow-amber-100 hover:bg-amber-700" :
+            "bg-blue-600 text-white shadow-blue-100 hover:bg-blue-700"
+          )}
+        >
+          Entendido
         </button>
       </motion.div>
     </div>
