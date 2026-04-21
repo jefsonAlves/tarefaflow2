@@ -156,6 +156,9 @@ import { SettingsView } from './components/SettingsView';
 import { BottomNavigation } from './components/BottomNavigation';
 import { EnvironmentSwitcher } from './components/EnvironmentSwitcher';
 import { AdminPanel } from './components/AdminPanel';
+import { TeacherDashboard } from './components/TeacherDashboard';
+import { HomeDashboard } from './components/HomeDashboard';
+import { AnnouncementsView } from './components/AnnouncementsView';
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -241,7 +244,7 @@ export default function App() {
     setToasts(prev => [...prev, { id, message, type }]);
     setTimeout(() => {
       setToasts(prev => prev.filter(t => t.id !== id));
-    }, 5000);
+    }, 6000); // Increased duration slightly
   };
 
   useEffect(() => {
@@ -284,9 +287,9 @@ export default function App() {
   const [isSyncingCalendar, setIsSyncingCalendar] = useState(false);
   const [activeTab, setActiveTab] = useState<string>(() => {
     try {
-      return localStorage.getItem('active_tab') || 'tasks';
+      return localStorage.getItem('active_tab') || 'home';
     } catch (e) {
-      return 'tasks';
+      return 'home';
     }
   });
   const [roleFilter, setRoleFilter] = useState<'all' | 'student' | 'teacher'>('all');
@@ -1648,6 +1651,63 @@ export default function App() {
               }
             }
           }
+          
+          // 4. Fetch Announcements
+          try {
+            const annRes = await fetchWithRetry('/api/google/classroom/announcements', {
+               method: 'POST',
+               headers: { 'Content-Type': 'application/json' },
+               body: JSON.stringify({ accessToken, courseId: course.id })
+            });
+            const annData = await annRes.json();
+            
+            if (annRes.ok && Array.isArray(annData)) {
+              for (const ann of annData) {
+                if (ann.state === 'DELETED') continue;
+                
+                // check if already exists in tasks
+                const existingAnn = tasks.find(t => t.externalId === ann.id && t.source === 'classroom_announcement');
+                const updateTime = ann.updateTime || ann.creationTime;
+                
+                if (!existingAnn) {
+                  try {
+                    await addDoc(collection(db, 'tasks'), {
+                      title: `Recado: ${course.name}`,
+                      description: ann.text || '',
+                      source: 'classroom_announcement',
+                      category: course.name || 'Recados',
+                      courseId: course.id,
+                      externalId: ann.id,
+                      userId: user.uid,
+                      priority: 'medium',
+                      completed: false,
+                      status: 'todo',
+                      dueDate: updateTime || new Date().toISOString(), // Use updatetime as dueDate to sort
+                      createdAt: Timestamp.now(),
+                      updateTime: updateTime,
+                      alternateLink: ann.alternateLink || null
+                    });
+                    totalImported++;
+                  } catch (e) {
+                    console.error("Failed to add announcement:", e);
+                  }
+                } else if (existingAnn.updateTime !== updateTime) {
+                  try {
+                    await updateDoc(doc(db, 'tasks', existingAnn.id), {
+                      description: ann.text || '',
+                      updateTime: updateTime,
+                      dueDate: updateTime || new Date().toISOString()
+                    });
+                    totalUpdated++;
+                  } catch (e) {
+                    console.error("Failed to update announcement:", e);
+                  }
+                }
+              }
+            }
+          } catch (e: any) {
+            console.warn(`Failed to fetch announcements for course ${course.id}:`, e);
+          }
         } catch (courseError: any) {
           if (courseError.message?.includes("invalid authentication credentials") || courseError.message?.includes("Expected OAuth 2 access token")) {
             throw courseError;
@@ -1718,30 +1778,35 @@ export default function App() {
         showInstallPrompt={showInstallPrompt}
         onInstallClick={handleInstallClick}
         userProfile={userProfile}
+        isTeacher={tasks.some(t => t.role === 'teacher')}
       />
 
       <main className="flex-1 overflow-x-hidden lg:pb-8">
         <div className="max-w-7xl mx-auto p-4 lg:p-8 w-full">
-          {/* Payment Banner */}
-          <PaymentBanner 
-            userProfile={userProfile} 
-            onPay={() => setActiveTab('settings')} 
-          />
+          {activeTab !== 'home' && (
+            <>
+              {/* Payment Banner */}
+              <PaymentBanner 
+                userProfile={userProfile} 
+                onPay={() => setActiveTab('settings')} 
+              />
 
-          {/* Due Soon Banner */}
-          <DueSoonBanner 
-            tasks={dueSoonTasks} 
-            onAction={() => setActiveTab('tasks')} 
-          />
+              {/* Due Soon Banner */}
+              <DueSoonBanner 
+                tasks={dueSoonTasks} 
+                onAction={() => setActiveTab('tasks')} 
+              />
 
-          {/* Notices Banner */}
-          <NoticeBanner 
-            notices={notices.filter(n => {
-              const seen = JSON.parse(localStorage.getItem(`seen_notices_${user?.uid}`) || '[]');
-              return !seen.includes(n.id);
-            })} 
-            onDismiss={markNoticeAsSeen} 
-          />
+              {/* Notices Banner */}
+              <NoticeBanner 
+                notices={notices.filter(n => {
+                  const seen = JSON.parse(localStorage.getItem(`seen_notices_${user?.uid}`) || '[]');
+                  return !seen.includes(n.id);
+                })} 
+                onDismiss={markNoticeAsSeen} 
+              />
+            </>
+          )}
 
           {/* Header */}
         {(isSyncing || isSyncingTasks) && (
@@ -1807,64 +1872,66 @@ export default function App() {
           </motion.div>
         )}
 
-        <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
-          <div className="flex items-center gap-4">
-            <button 
-              onClick={() => setIsSidebarOpen(true)}
-              className="lg:hidden p-2.5 bg-white rounded-2xl shadow-sm text-slate-600 border border-slate-100 active:scale-95 transition-transform"
-            >
-              <Menu className="w-6 h-6" />
-            </button>
-            <div className="min-w-0">
-              <h1 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight truncate">
-                {activeTab === 'tasks' ? (selectedSubjectId ? subjects.find(s => s.id === selectedSubjectId)?.name : 'Minhas Tarefas') :
-                 activeTab === 'kanban' ? 'Quadro Kanban' :
-                 activeTab === 'calendar' ? 'Calendário' :
-                 activeTab === 'reminders' ? 'Lembretes' :
-                 activeTab === 'notes' ? 'Minhas Notas' :
-                 activeTab === 'settings' ? 'Configurações Acadêmicas' : 'Disciplinas'}
-              </h1>
-              <p className="text-slate-500 font-medium text-sm md:text-base">
-                {new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })}
-              </p>
+        {activeTab !== 'home' && (
+          <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
+            <div className="flex items-center gap-4">
+              <button 
+                onClick={() => setIsSidebarOpen(true)}
+                className="lg:hidden p-2.5 bg-white rounded-2xl shadow-sm text-slate-600 border border-slate-100 active:scale-95 transition-transform"
+              >
+                <Menu className="w-6 h-6" />
+              </button>
+              <div className="min-w-0">
+                <h1 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight truncate">
+                  {activeTab === 'tasks' ? (selectedSubjectId ? subjects.find(s => s.id === selectedSubjectId)?.name : 'Minhas Tarefas') :
+                   activeTab === 'kanban' ? 'Quadro Kanban' :
+                   activeTab === 'calendar' ? 'Calendário' :
+                   activeTab === 'reminders' ? 'Lembretes' :
+                   activeTab === 'notes' ? 'Minhas Notas' :
+                   activeTab === 'settings' ? 'Configurações Acadêmicas' : 'Disciplinas'}
+                </h1>
+                <p className="text-slate-500 font-medium text-sm md:text-base">
+                  {new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })}
+                </p>
+              </div>
             </div>
-          </div>
 
-          <div className="flex items-center gap-2 md:gap-3">
-            <button 
-              onClick={() => syncGoogleTasks()}
-              disabled={isSyncingTasks}
-              className={cn(
-                "flex items-center gap-2 px-4 md:px-5 py-2.5 md:py-3 bg-white border-2 border-slate-100 rounded-2xl font-bold text-slate-700 hover:border-blue-500 hover:text-blue-600 transition-all shadow-sm active:scale-95",
-                isSyncingTasks && "opacity-50 cursor-not-allowed"
-              )}
-              title="Sincronizar Agenda"
-            >
-              <Calendar className={cn("w-5 h-5", isSyncingTasks && "animate-spin")} />
-              <span className="hidden sm:inline">{isSyncingTasks ? 'Sincronizando...' : 'Agenda'}</span>
-            </button>
-            <button 
-              onClick={() => syncClassroom()}
-              disabled={isSyncing}
-              className={cn(
-                "flex items-center gap-2 px-4 md:px-5 py-2.5 md:py-3 bg-white border-2 border-slate-100 rounded-2xl font-bold text-slate-700 hover:border-blue-500 hover:text-blue-600 transition-all shadow-sm active:scale-95",
-                isSyncing && "opacity-50 cursor-not-allowed"
-              )}
-              title="Sincronizar Classroom"
-            >
-              <RefreshCw className={cn("w-5 h-5", isSyncing && "animate-spin")} />
-              <span className="hidden sm:inline">{isSyncing ? 'Sincronizando...' : 'Classroom'}</span>
-            </button>
-            <button 
-              onClick={() => setShowCreateModal(true)}
-              className="flex items-center gap-2 px-4 md:px-6 py-2.5 md:py-3 bg-blue-600 text-white rounded-2xl font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 active:scale-95"
-            >
-              <Plus className="w-5 h-5" />
-              <span className="hidden sm:inline">Nova Tarefa</span>
-              <span className="sm:hidden">Nova</span>
-            </button>
-          </div>
-        </header>
+            <div className="flex items-center gap-2 md:gap-3">
+              <button 
+                onClick={() => syncGoogleTasks()}
+                disabled={isSyncingTasks}
+                className={cn(
+                  "flex items-center gap-2 px-4 md:px-5 py-2.5 md:py-3 bg-white border-2 border-slate-100 rounded-2xl font-bold text-slate-700 hover:border-blue-500 hover:text-blue-600 transition-all shadow-sm active:scale-95",
+                  isSyncingTasks && "opacity-50 cursor-not-allowed"
+                )}
+                title="Sincronizar Agenda"
+              >
+                <Calendar className={cn("w-5 h-5", isSyncingTasks && "animate-spin")} />
+                <span className="hidden sm:inline">{isSyncingTasks ? 'Sincronizando...' : 'Agenda'}</span>
+              </button>
+              <button 
+                onClick={() => syncClassroom()}
+                disabled={isSyncing}
+                className={cn(
+                  "flex items-center gap-2 px-4 md:px-5 py-2.5 md:py-3 bg-white border-2 border-slate-100 rounded-2xl font-bold text-slate-700 hover:border-blue-500 hover:text-blue-600 transition-all shadow-sm active:scale-95",
+                  isSyncing && "opacity-50 cursor-not-allowed"
+                )}
+                title="Sincronizar Classroom"
+              >
+                <RefreshCw className={cn("w-5 h-5", isSyncing && "animate-spin")} />
+                <span className="hidden sm:inline">{isSyncing ? 'Sincronizando...' : 'Classroom'}</span>
+              </button>
+              <button 
+                onClick={() => setShowCreateModal(true)}
+                className="flex items-center gap-2 px-4 md:px-6 py-2.5 md:py-3 bg-blue-600 text-white rounded-2xl font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 active:scale-95"
+              >
+                <Plus className="w-5 h-5" />
+                <span className="hidden sm:inline">Nova Tarefa</span>
+                <span className="sm:hidden">Nova</span>
+              </button>
+            </div>
+          </header>
+        )}
 
         {/* Filters & Tabs (Only for tasks/kanban/calendar) */}
         {(activeTab === 'tasks' || activeTab === 'kanban' || activeTab === 'calendar') && (
@@ -1935,7 +2002,16 @@ export default function App() {
             exit={{ opacity: 0, y: -10 }}
             transition={{ duration: 0.2 }}
           >
-            {activeTab === 'tasks' ? (
+            {activeTab === 'home' ? (
+              <HomeDashboard
+                tasks={filteredTasks}
+                notices={notices}
+                userProfile={userProfile}
+                setActiveTab={setActiveTab}
+                isAdmin={userProfile?.role_user === 'admin'}
+                isTeacher={tasks.some(t => t.role === 'teacher')}
+              />
+            ) : activeTab === 'tasks' ? (
               <DragDropContext onDragEnd={handleDragEnd}>
                 <EnvironmentSwitcher 
                   role={userRole} 
@@ -2012,6 +2088,10 @@ export default function App() {
                 onAddTerm={() => setShowTermModal(true)}
                 onDeleteTerm={deleteTerm}
               />
+            ) : activeTab === 'teacher-inbox' ? (
+              <TeacherDashboard tasks={tasks} subjects={subjects} />
+            ) : activeTab === 'announcements' ? (
+              <AnnouncementsView tasks={tasks} subjects={subjects} />
             ) : activeTab === 'admin' && userProfile?.role_user === 'admin' ? (
               <AdminPanel 
                 users={allUsers}
@@ -2075,7 +2155,6 @@ export default function App() {
       <BottomNavigation 
         activeTab={activeTab} 
         setActiveTab={setActiveTab} 
-        isAdmin={userProfile?.role_user === 'admin'} 
       />
     </div>
 
@@ -2167,26 +2246,41 @@ export default function App() {
       {/* Auth Error Modal */}
       <AnimatePresence>
         {/* Toast Notifications */}
-      <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-[100] flex flex-col gap-2 w-full max-w-md px-4 pointer-events-none">
+      <div className="fixed top-4 right-4 z-[1000] flex flex-col gap-3 w-full max-w-sm px-4 pointer-events-none">
         <AnimatePresence>
           {toasts.map(toast => (
             <motion.div
               key={toast.id}
-              initial={{ opacity: 0, y: 20, scale: 0.95 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
+              initial={{ opacity: 0, x: 50, scale: 0.95 }}
+              animate={{ opacity: 1, x: 0, scale: 1 }}
+              exit={{ opacity: 0, x: 20, scale: 0.95 }}
+              transition={{ type: "spring", stiffness: 300, damping: 25 }}
               className={cn(
-                "p-4 rounded-2xl shadow-lg border flex items-center gap-3 pointer-events-auto",
-                toast.type === 'error' ? "bg-red-50 border-red-100 text-red-800" :
-                toast.type === 'success' ? "bg-green-50 border-green-100 text-green-800" :
-                "bg-white border-slate-200 text-slate-800"
+                "p-4 rounded-xl shadow-2xl border flex items-start gap-4 pointer-events-auto backdrop-blur-md",
+                toast.type === 'error' ? "bg-red-50/95 border-red-200 text-red-900" :
+                toast.type === 'success' ? "bg-green-50/95 border-green-200 text-green-900" :
+                "bg-blue-50/95 border-blue-200 text-blue-900"
               )}
             >
-              {toast.type === 'error' ? <AlertCircle className="w-5 h-5 shrink-0" /> : <CheckCircle2 className="w-5 h-5 shrink-0" />}
-              <p className="text-sm font-medium">{toast.message}</p>
+              <div className={cn(
+                "mt-0.5 rounded-full p-1",
+                toast.type === 'error' ? "bg-red-100 text-red-600" :
+                toast.type === 'success' ? "bg-green-100 text-green-600" :
+                "bg-blue-100 text-blue-600"
+              )}>
+                {toast.type === 'error' && <AlertCircle className="w-5 h-5" />}
+                {toast.type === 'success' && <CheckCircle2 className="w-5 h-5" />}
+                {toast.type === 'info' && <Bell className="w-5 h-5" />}
+              </div>
+              <div className="flex-1">
+                <h4 className="font-bold text-sm mb-0.5">
+                  {toast.type === 'error' ? 'Erro' : toast.type === 'success' ? 'Sucesso' : 'Aviso'}
+                </h4>
+                <p className="text-sm opacity-90 leading-relaxed">{toast.message}</p>
+              </div>
               <button 
                 onClick={() => setToasts(prev => prev.filter(t => t.id !== toast.id))}
-                className="ml-auto p-1 hover:bg-black/5 rounded-lg transition-colors"
+                className="ml-auto p-1.5 hover:bg-black/5 rounded-lg transition-colors shrink-0"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -2716,6 +2810,9 @@ function DiagnosticsPanel({ status, onClose, onReauth }: { status: any, onClose:
 
 function TaskCard({ task, subjects, onToggle, onDelete, onMove }: { task: Task, subjects: Subject[], onToggle: () => void | Promise<void>, onDelete: () => void | Promise<void>, onMove?: (id: string, newStatus: Task['status']) => void, key?: any }) {
   const getStatusInfo = () => {
+    if (task.source === 'classroom_announcement') {
+      return { label: 'Recado', color: 'bg-indigo-100 text-indigo-700', icon: <Bell className="w-3 h-3" /> };
+    }
     if (task.source !== 'classroom') return null;
     
     const status = task.submissionStatus;
@@ -2728,13 +2825,13 @@ function TaskCard({ task, subjects, onToggle, onDelete, onMove }: { task: Task, 
   const statusInfo = getStatusInfo();
 
   const isNearOverdue = useMemo(() => {
-    if (task.completed) return false;
+    if (task.completed || task.source === 'classroom_announcement') return false;
     const dueDate = new Date(task.dueDate);
     const now = new Date();
     const diff = dueDate.getTime() - now.getTime();
     const hours = diff / (1000 * 60 * 60);
     return hours > 0 && hours <= 24;
-  }, [task.dueDate, task.completed]);
+  }, [task.dueDate, task.completed, task.source]);
 
   const subjectName = task.subjectId ? subjects.find(s => s.id === task.subjectId)?.name : task.category;
 
@@ -2787,7 +2884,7 @@ function TaskCard({ task, subjects, onToggle, onDelete, onMove }: { task: Task, 
           </h3>
           
           {/* 3rd: Status and Deadline */}
-          {task.source === 'classroom' && statusInfo && (
+          {(task.source === 'classroom' || task.source === 'classroom_announcement') && statusInfo && (
             <span className={cn(
               "text-[10px] px-2 py-0.5 rounded-full font-bold uppercase flex items-center gap-1",
               statusInfo.color
@@ -2797,7 +2894,7 @@ function TaskCard({ task, subjects, onToggle, onDelete, onMove }: { task: Task, 
             </span>
           )}
 
-          {task.hasDueDate && (
+          {task.hasDueDate && task.source !== 'classroom_announcement' && (
             <span className={cn(
               "text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider flex items-center gap-1",
               isNearOverdue && !task.completed ? "bg-amber-100 text-amber-700 animate-pulse" : 

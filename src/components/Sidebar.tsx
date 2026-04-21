@@ -14,7 +14,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Plus,
-  ShieldCheck
+  ShieldCheck,
+  LayoutDashboard
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { Subject, AcademicTerm, StudentProfileType, UserProfile } from '../types';
@@ -32,6 +33,7 @@ interface SidebarProps {
   onAddSubject: () => void;
   onAddTerm: () => void;
   userProfile: UserProfile | null;
+  isTeacher?: boolean;
 }
 
 export function Sidebar({ 
@@ -48,7 +50,8 @@ export function Sidebar({
   onAddTerm,
   showInstallPrompt,
   onInstallClick,
-  userProfile
+  userProfile,
+  isTeacher
 }: SidebarProps & { showInstallPrompt?: boolean, onInstallClick?: () => void }) {
   
   const handleTabClick = (tab: string) => {
@@ -154,6 +157,7 @@ export function Sidebar({
           <div className="px-3 space-y-1 mb-6">
             {isOpen && <p className="px-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Menu</p>}
             {[
+              { id: 'home', label: 'Início', icon: <LayoutDashboard className="w-5 h-5" /> },
               { id: 'tasks', label: 'Tarefas', icon: <CheckSquare className="w-5 h-5" /> },
               { id: 'kanban', label: 'Kanban', icon: <BookOpen className="w-5 h-5" /> },
               { id: 'calendar', label: 'Calendário', icon: <Calendar className="w-5 h-5" /> },
@@ -233,6 +237,26 @@ export function Sidebar({
               <Settings className="w-5 h-5" />
               {isOpen && <span className="truncate">Configurações</span>}
             </button>
+
+            {isTeacher && (
+              <button
+                onClick={() => handleTabClick('teacher-inbox')}
+                className={cn(
+                  "w-full flex items-center rounded-xl font-medium transition-all group relative",
+                  isOpen ? "px-4 py-3 gap-3" : "p-3 justify-center",
+                  activeTab === 'teacher-inbox'
+                    ? "bg-indigo-50 text-indigo-700"
+                    : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                )}
+                title={!isOpen ? "Painel do Professor" : undefined}
+              >
+                <div className="relative">
+                  <Bell className="w-5 h-5" />
+                  <div className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-indigo-500 rounded-full border-2 border-white" />
+                </div>
+                {isOpen && <span className="truncate">Painel do Prof</span>}
+              </button>
+            )}
 
             {userProfile?.role_user === 'admin' && (
               <button

@@ -62,7 +62,7 @@ service cloud.firestore {
              data.completed is bool &&
              data.priority in ['low', 'medium', 'high'] &&
              data.category is string && data.category.size() > 0 && data.category.size() <= 200 &&
-             data.source in ['local', 'classroom', 'tasks'] &&
+             data.source in ['local', 'classroom', 'tasks', 'classroom_announcement'] &&
              data.userId is string && data.userId == request.auth.uid &&
              (!('description' in data) || data.description == null || (data.description is string && data.description.size() <= 2000)) &&
              (!('externalId' in data) || data.externalId == null || data.externalId is string) &&

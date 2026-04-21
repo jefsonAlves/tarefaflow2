@@ -1,16 +1,12 @@
-import { Calendar, CheckSquare, Settings, BookOpen, Shield } from 'lucide-react';
+import { Calendar, CheckSquare, Settings, Home } from 'lucide-react';
 
-export function BottomNavigation({ activeTab, setActiveTab, isAdmin }: { activeTab: string, setActiveTab: (tab: string) => void, isAdmin?: boolean }) {
+export function BottomNavigation({ activeTab, setActiveTab }: { activeTab: string, setActiveTab: (tab: string) => void }) {
   const navItems = [
+    { id: 'home', icon: Home, label: 'Início' },
     { id: 'tasks', icon: CheckSquare, label: 'Tarefas' },
     { id: 'calendar', icon: Calendar, label: 'Calendário' },
-    { id: 'academic', icon: BookOpen, label: 'Acadêmico' },
     { id: 'settings', icon: Settings, label: 'Config' },
   ];
-
-  if (isAdmin) {
-    navItems.push({ id: 'admin', icon: Shield, label: 'Admin' });
-  }
 
   return (
     <div className="fixed bottom-0 left-0 right-0 bg-white/80 backdrop-blur-lg border-t border-slate-100 p-2 flex justify-around items-center pb-[max(0.5rem,env(safe-area-inset-bottom))] z-50 lg:hidden">

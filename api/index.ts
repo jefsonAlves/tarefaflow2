@@ -49,6 +49,23 @@ app.post("/api/google/classroom/coursework", async (req, res) => {
   }
 });
 
+app.post("/api/google/classroom/announcements", async (req, res) => {
+  const { accessToken, courseId } = req.body;
+  if (!accessToken) return res.status(401).json({ error: "No token provided" });
+  
+  try {
+    const auth = new OAuth2Client();
+    auth.setCredentials({ access_token: accessToken });
+    const classroom = google.classroom({ version: "v1", auth });
+    const response = await classroom.courses.announcements.list({ courseId });
+    res.json(response.data.announcements || []);
+  } catch (error: any) {
+    console.error(`Classroom API Error (Announcements) for course ${courseId}:`, error);
+    const message = error.response?.data?.error?.message || error.message || "Failed to fetch announcements";
+    res.status(500).json({ error: message });
+  }
+});
+
 app.post("/api/google/classroom/submissions", async (req, res) => {
   const { accessToken, courseId, courseWorkId, role } = req.body;
   if (!accessToken) return res.status(401).json({ error: "No token provided" });

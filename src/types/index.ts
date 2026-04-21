@@ -15,10 +15,13 @@ export interface Notice {
   id: string;
   title: string;
   content: string;
-  type: 'info' | 'warning' | 'promo' | 'urgent';
+  type: 'info' | 'warning' | 'promo' | 'urgent' | 'classroom_announcement';
   active: boolean;
   createdAt: string;
   userId?: string; // If specific to a user
+  courseId?: string; // For classroom announcements
+  externalId?: string; // For classroom announcements
+  courseName?: string; // For classroom announcements
 }
 
 export interface Task {
@@ -31,8 +34,9 @@ export interface Task {
   status: TaskStatus;
   priority: 'low' | 'medium' | 'high';
   category: string;
-  source: 'local' | 'classroom' | 'tasks';
+  source: 'local' | 'classroom' | 'tasks' | 'classroom_announcement';
   externalId?: string;
+
   courseId?: string;
   role?: 'student' | 'teacher';
   submissionStatus?: 'TURNED_IN' | 'RETURNED' | 'NEW' | 'RECLAIMED_BY_STUDENT';
