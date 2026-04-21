@@ -11,6 +11,7 @@ import {
   Menu,
   Bell,
   StickyNote,
+  Megaphone,
   ChevronLeft,
   ChevronRight,
   Plus,
@@ -157,12 +158,18 @@ export function Sidebar({
           <div className="px-3 space-y-1 mb-6">
             {isOpen && <p className="px-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Menu</p>}
             {[
-              { id: 'home', label: 'Início', icon: <LayoutDashboard className="w-5 h-5" /> },
+              { id: 'home', label: 'Inicial', icon: <LayoutDashboard className="w-5 h-5" /> },
               { id: 'tasks', label: 'Tarefas', icon: <CheckSquare className="w-5 h-5" /> },
               { id: 'kanban', label: 'Kanban', icon: <BookOpen className="w-5 h-5" /> },
               { id: 'calendar', label: 'Calendário', icon: <Calendar className="w-5 h-5" /> },
               { id: 'reminders', label: 'Lembretes', icon: <Bell className="w-5 h-5" /> },
               { id: 'notes', label: 'Notas', icon: <StickyNote className="w-5 h-5" /> },
+              { id: 'announcements', label: 'Avisos', icon: (
+                <div className="relative">
+                  <Megaphone className="w-5 h-5" />
+                  <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full animate-pulse" />
+                </div>
+              )},
             ].map(item => (
               <button
                 key={item.id}

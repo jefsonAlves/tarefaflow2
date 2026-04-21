@@ -2,7 +2,7 @@ import { Calendar, CheckSquare, Settings, Home } from 'lucide-react';
 
 export function BottomNavigation({ activeTab, setActiveTab }: { activeTab: string, setActiveTab: (tab: string) => void }) {
   const navItems = [
-    { id: 'home', icon: Home, label: 'Início' },
+    { id: 'home', icon: Home, label: 'Inicial' },
     { id: 'tasks', icon: CheckSquare, label: 'Tarefas' },
     { id: 'calendar', icon: Calendar, label: 'Calendário' },
     { id: 'settings', icon: Settings, label: 'Config' },

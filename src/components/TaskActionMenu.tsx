@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { MoreVertical, Trash2, ArrowRight } from 'lucide-react';
+import { MoreVertical, Trash2, ArrowRight, Bell } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Task } from '../types';
 
@@ -7,9 +7,10 @@ interface TaskActionMenuProps {
   task: Task;
   onDelete: (id: string) => void;
   onMove: (id: string, newStatus: Task['status']) => void;
+  onConfigureReminder?: () => void;
 }
 
-export const TaskActionMenu: React.FC<TaskActionMenuProps> = ({ task, onDelete, onMove }) => {
+export const TaskActionMenu: React.FC<TaskActionMenuProps> = ({ task, onDelete, onMove, onConfigureReminder }) => {
   const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
   const [showMoveOptions, setShowMoveOptions] = useState(false);
@@ -33,7 +34,19 @@ export const TaskActionMenu: React.FC<TaskActionMenuProps> = ({ task, onDelete, 
   ];
 
   return (
-    <div className="relative" ref={menuRef}>
+    <div className="relative flex items-center" ref={menuRef}>
+      {onConfigureReminder && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onConfigureReminder();
+          }}
+          className="p-1 text-gray-400 hover:text-blue-500 mr-1 rounded-full hover:bg-gray-100 transition-colors"
+          title="Configurar Lembrete"
+        >
+          <Bell className="w-5 h-5" />
+        </button>
+      )}
       <button
         onClick={(e) => {
           e.stopPropagation();

@@ -76,9 +76,9 @@ export function AnnouncementsView({ tasks, subjects }: AnnouncementsViewProps) {
                       href={ann.alternateLink}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center gap-2 bg-slate-50 hover:bg-slate-100 text-slate-700 px-4 py-2 rounded-xl text-sm font-bold transition-colors"
+                      className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-sm font-bold transition-colors shadow-md shadow-blue-200"
                     >
-                      Abrir no Classroom
+                      Responder / Ver no Classroom
                       <ChevronRight className="w-4 h-4" />
                     </a>
                   )}

@@ -168,18 +168,42 @@ export function SettingsView({
             </section>
           </div>
 
-          <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+          <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700">
+            <h3 className="font-semibold mb-2">{t('Tema')}</h3>
+            <div className="flex gap-2">
+              <button 
+                onClick={() => {
+                  if (document.documentElement.classList.contains('dark')) {
+                    document.documentElement.classList.remove('dark');
+                  }
+                }} 
+                className={`flex-1 p-2 rounded-lg font-medium transition-colors ${!document.documentElement.classList.contains('dark') ? 'bg-blue-600 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200'}`}
+              >
+                Claro
+              </button>
+              <button 
+                onClick={() => {
+                  document.documentElement.classList.add('dark');
+                }} 
+                className={`flex-1 p-2 rounded-lg font-medium transition-colors ${document.documentElement.classList.contains('dark') ? 'bg-blue-600 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200'}`}
+              >
+                Escuro
+              </button>
+            </div>
+          </div>
+
+          <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700">
             <h3 className="font-semibold mb-2">{t('language')}</h3>
             <div className="flex gap-2">
               <button 
                 onClick={() => i18n.changeLanguage('en')} 
-                className={`flex-1 p-2 rounded-lg font-medium transition-colors ${i18n.language === 'en' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+                className={`flex-1 p-2 rounded-lg font-medium transition-colors ${i18n.language === 'en' ? 'bg-blue-600 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200'}`}
               >
                 EN
               </button>
               <button 
                 onClick={() => i18n.changeLanguage('pt')} 
-                className={`flex-1 p-2 rounded-lg font-medium transition-colors ${i18n.language === 'pt' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+                className={`flex-1 p-2 rounded-lg font-medium transition-colors ${i18n.language === 'pt' ? 'bg-blue-600 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200'}`}
               >
                 PT
               </button>
