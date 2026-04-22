@@ -163,9 +163,16 @@ import { AnnouncementsView } from './components/AnnouncementsView';
 import { ReminderModal } from './components/ReminderModal';
 
 export default function App() {
-  const [theme, setTheme] = useState<'light' | 'dark'>('dark');
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+    try {
+      return (localStorage.getItem('theme') as any) || 'dark';
+    } catch (e) {
+      return 'dark';
+    }
+  });
 
   useEffect(() => {
+    localStorage.setItem('theme', theme);
     if (theme === 'dark') {
       document.documentElement.classList.add('dark');
     } else {
@@ -202,7 +209,7 @@ export default function App() {
         triggerNotification('Novo Aviso no Classroom', {
           body: latestAnn.title.replace('Recado: ', ''),
           icon: '/favicon.ico'
-        });
+        }, latestAnn);
         localStorage.setItem('last_announcement_time', latestAnn.updateTime);
       }
     }
@@ -252,8 +259,18 @@ export default function App() {
     }
   };
 
-  const triggerNotification = (title: string, options: NotificationOptions) => {
+  const triggerNotification = (title: string, options: NotificationOptions, task?: Task) => {
     playAlarmSound();
+    
+    // Add to in-app notifications if task is provided
+    if (task) {
+      setActiveInAppNotifications(prev => {
+        // Prevent duplicates
+        if (prev.some(n => n.task.id === task.id)) return prev;
+        return [...prev, { id: Math.random().toString(36).substring(7), task }];
+      });
+    }
+
     if ('Notification' in window && Notification.permission === 'granted') {
       try {
         new Notification(title, options);
@@ -324,6 +341,8 @@ export default function App() {
       return 'home';
     }
   });
+  const [activeInAppNotifications, setActiveInAppNotifications] = useState<{ id: string; task: Task }[]>([]);
+  const [taskToReschedule, setTaskToReschedule] = useState<Task | null>(null);
   const [roleFilter, setRoleFilter] = useState<'all' | 'student' | 'teacher'>('all');
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [showDiagnostics, setShowDiagnostics] = useState(false);
@@ -581,7 +600,7 @@ export default function App() {
             triggerNotification(`Lembrete: ${task.title}`, {
               body: task.description || 'Você tem uma tarefa pendente.',
               icon: '/favicon.ico'
-            });
+            }, task);
 
             // Calculate next schedule
             let nextTime = new Date(now);
@@ -646,7 +665,7 @@ export default function App() {
               triggerNotification(title, {
                 body,
                 icon: '/favicon.ico'
-              });
+              }, task);
               notifiedTasks[task.id] = now.getTime();
               updated = true;
             }
@@ -969,15 +988,17 @@ export default function App() {
     const groupUpcoming = groupTasks.filter(t => {
       const d = new Date(t.dueDate);
       const now = new Date();
-      return d > now && d.toDateString() !== now.toDateString() && t.status === 'todo';
+      return d > now && d.toDateString() !== now.toDateString() && (t.status === 'todo' || !t.completed);
     });
+    const groupDone = groupTasks.filter(t => t.status === 'done' || t.completed);
 
     return (
       <div className="space-y-12">
-        {renderTaskSection(groupInProgress, "Em Progresso", <Clock className="w-5 h-5" />, "text-blue-600", `${prefix}-inprogress`)}
-        {renderTaskSection(groupOverdue, "Atrasadas", <AlertCircle className="w-5 h-5" />, "text-red-600", `${prefix}-overdue`)}
-        {renderTaskSection(groupToday, "Para Hoje", <Clock className="w-5 h-5" />, "text-blue-600", `${prefix}-today`, "Tudo limpo por aqui!")}
-        {renderTaskSection(groupUpcoming, "Próximas", <Calendar className="w-5 h-5" />, "text-purple-600", `${prefix}-upcoming`)}
+        {renderTaskSection(groupInProgress, "Em Execução", <Clock className="w-5 h-5" />, "text-blue-600", `${prefix}-inprogress`)}
+        {renderTaskSection(groupOverdue, "Atrasadas (Pendentes)", <AlertCircle className="w-5 h-5" />, "text-red-600", `${prefix}-overdue`)}
+        {renderTaskSection(groupToday, "Para Hoje (Pendentes)", <Clock className="w-5 h-5" />, "text-blue-600", `${prefix}-today`, "Tudo limpo por aqui!")}
+        {renderTaskSection(groupUpcoming, "Próximas (Pendentes)", <Calendar className="w-5 h-5" />, "text-purple-600", `${prefix}-upcoming`)}
+        {renderTaskSection(groupDone, "Concluídas / Entregues", <CheckCircle2 className="w-5 h-5" />, "text-green-600", `${prefix}-done`)}
       </div>
     );
   };
@@ -1291,6 +1312,16 @@ export default function App() {
       }
       throw error;
     }
+  };
+
+  const handleSyncToCalendar = async (task: Task) => {
+    if (!accessToken) {
+      setAuthErrorMessage("Para sincronizar tarefas com o Google Agenda, é necessário conectar sua conta Google.");
+      setShowAuthModal(true);
+      return;
+    }
+    await syncGoogleCalendar(task);
+    showToast('Iniciando sincronização...', 'info');
   };
 
   const syncGoogleCalendar = async (task: Task) => {
@@ -1955,38 +1986,44 @@ export default function App() {
             </div>
 
             <div className="flex items-center gap-2 md:gap-3">
-              <button 
+              <motion.button 
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.95 }}
                 onClick={() => syncGoogleTasks()}
                 disabled={isSyncingTasks}
                 className={cn(
-                  "flex items-center gap-2 px-4 md:px-5 py-2.5 md:py-3 bg-white border-2 border-slate-100 rounded-2xl font-bold text-slate-700 hover:border-blue-500 hover:text-blue-600 transition-all shadow-sm active:scale-95",
+                  "flex items-center gap-2 px-4 md:px-5 py-2.5 md:py-3 bg-white dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-700 rounded-2xl font-bold text-slate-700 dark:text-slate-200 hover:border-blue-500 hover:text-blue-600 transition-all shadow-sm",
                   isSyncingTasks && "opacity-50 cursor-not-allowed"
                 )}
                 title="Sincronizar Agenda"
               >
                 <Calendar className={cn("w-5 h-5", isSyncingTasks && "animate-spin")} />
                 <span className="hidden sm:inline">{isSyncingTasks ? 'Sincronizando...' : 'Agenda'}</span>
-              </button>
-              <button 
+              </motion.button>
+              <motion.button 
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.95 }}
                 onClick={() => syncClassroom()}
                 disabled={isSyncing}
                 className={cn(
-                  "flex items-center gap-2 px-4 md:px-5 py-2.5 md:py-3 bg-white border-2 border-slate-100 rounded-2xl font-bold text-slate-700 hover:border-blue-500 hover:text-blue-600 transition-all shadow-sm active:scale-95",
+                  "flex items-center gap-2 px-4 md:px-5 py-2.5 md:py-3 bg-white dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-700 rounded-2xl font-bold text-slate-700 dark:text-slate-200 hover:border-blue-500 hover:text-blue-600 transition-all shadow-sm",
                   isSyncing && "opacity-50 cursor-not-allowed"
                 )}
                 title="Sincronizar Classroom"
               >
                 <RefreshCw className={cn("w-5 h-5", isSyncing && "animate-spin")} />
                 <span className="hidden sm:inline">{isSyncing ? 'Sincronizando...' : 'Classroom'}</span>
-              </button>
-              <button 
+              </motion.button>
+              <motion.button 
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
                 onClick={() => setShowCreateModal(true)}
-                className="flex items-center gap-2 px-4 md:px-6 py-2.5 md:py-3 bg-blue-600 text-white rounded-2xl font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 active:scale-95"
+                className="flex items-center gap-2 px-4 md:px-6 py-2.5 md:py-3 bg-blue-600 text-white rounded-2xl font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-200"
               >
                 <Plus className="w-5 h-5" />
                 <span className="hidden sm:inline">Nova Tarefa</span>
                 <span className="sm:hidden">Nova</span>
-              </button>
+              </motion.button>
             </div>
           </header>
         )}
@@ -2029,12 +2066,12 @@ export default function App() {
               <select 
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value as any)}
-                className="px-4 py-2.5 bg-white border-2 border-slate-100 rounded-2xl text-sm font-bold text-slate-700 outline-none focus:border-blue-500 transition-all"
+                className="px-4 py-2.5 bg-white dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-700 rounded-2xl text-sm font-bold text-slate-700 dark:text-slate-200 outline-none focus:border-blue-500 transition-all"
               >
-                <option value="all">Todos Status</option>
-                <option value="todo">A Fazer</option>
-                <option value="in-progress">Em Progresso</option>
-                <option value="done">Concluído</option>
+                <option value="all">Situação (Todas)</option>
+                <option value="todo">Pendentes</option>
+                <option value="in-progress">Em Execução</option>
+                <option value="done">Concluídas / Entregues</option>
               </select>
 
               <select 
@@ -2282,6 +2319,118 @@ export default function App() {
       </AnimatePresence>
 
       {/* Diagnostics Panel */}
+      {/* In-App Notifications Overlay */}
+      <div className="fixed top-4 left-4 right-4 z-[200] pointer-events-none flex flex-col items-center gap-3">
+        <AnimatePresence>
+          {activeInAppNotifications.map((notif) => (
+            <motion.div
+              key={notif.id}
+              initial={{ opacity: 0, y: -50, scale: 0.9 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9, transition: { duration: 0.2 } }}
+              className="bg-white dark:bg-slate-900 rounded-3xl p-4 shadow-2xl border border-slate-100 dark:border-slate-800 w-full max-w-md pointer-events-auto flex gap-4 items-center"
+            >
+              <div className={cn(
+                "w-12 h-12 rounded-2xl flex items-center justify-center shrink-0",
+                notif.task.priority === 'high' ? "bg-red-100 text-red-600" :
+                notif.task.priority === 'medium' ? "bg-amber-100 text-amber-600" :
+                "bg-blue-100 text-blue-600"
+              )}>
+                <Bell className="w-6 h-6" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h4 className="font-bold text-slate-900 dark:text-white truncate">{notif.task.title}</h4>
+                <p className="text-xs text-slate-500 truncate">{notif.task.category}</p>
+              </div>
+              <div className="flex gap-2">
+                <motion.button 
+                  whileTap={{ scale: 0.9 }}
+                  onClick={() => {
+                    handleMoveTask(notif.task.id, 'done');
+                    setActiveInAppNotifications(prev => prev.filter(n => n.id !== notif.id));
+                  }}
+                  className="p-2 bg-green-50 text-green-600 rounded-xl hover:bg-green-100 transition-colors"
+                  title="Concluir"
+                >
+                  <CheckCircle2 className="w-5 h-5" />
+                </motion.button>
+                <motion.button 
+                  whileTap={{ scale: 0.9 }}
+                  onClick={() => {
+                    setTaskToReschedule(notif.task);
+                    setActiveInAppNotifications(prev => prev.filter(n => n.id !== notif.id));
+                  }}
+                  className="p-2 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-100 transition-colors"
+                  title="Adiar"
+                >
+                  <Clock className="w-5 h-5" />
+                </motion.button>
+                <motion.button 
+                  whileTap={{ scale: 0.9 }}
+                  onClick={() => setActiveInAppNotifications(prev => prev.filter(n => n.id !== notif.id))}
+                  className="p-2 text-slate-400 hover:bg-slate-50 rounded-xl transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </motion.button>
+              </div>
+            </motion.div>
+          ))}
+        </AnimatePresence>
+      </div>
+
+      {/* Reschedule Quick Modal */}
+      <AnimatePresence>
+        {taskToReschedule && (
+          <div className="fixed inset-0 z-[210] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white dark:bg-slate-900 rounded-[32px] p-6 w-full max-w-sm shadow-2xl border border-slate-100 dark:border-slate-800 space-y-6"
+            >
+              <h3 className="text-xl font-bold text-slate-900 dark:text-white">Adiar Tarefa</h3>
+              <p className="text-sm text-slate-500">Escolha quanto tempo deseja adiar o lembrete para <strong>{taskToReschedule.title}</strong></p>
+              
+              <div className="grid grid-cols-2 gap-3">
+                {[
+                  { label: '+10 min', value: 10 },
+                  { label: '+30 min', value: 30 },
+                  { label: '+1 hora', value: 60 },
+                  { label: '+4 horas', value: 240 },
+                  { label: 'Amanhã', value: 1440 },
+                  { label: 'Próx. Semana', value: 10080 },
+                ].map(opt => (
+                  <motion.button
+                    key={opt.label}
+                    whileHover={{ scale: 1.02, backgroundColor: 'rgba(59, 130, 246, 0.1)' }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={async () => {
+                      const newTime = new Date(Date.now() + opt.value * 60000).toISOString();
+                      await updateDoc(doc(db, 'tasks', taskToReschedule.id), {
+                        'reminderConfig.nextReminder': newTime,
+                        updatedAt: Timestamp.now()
+                      });
+                      showToast(`Lembrete adiado por ${opt.label}`, 'success');
+                      setTaskToReschedule(null);
+                    }}
+                    className="p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl font-bold text-slate-700 dark:text-slate-200 border border-slate-100 dark:border-slate-700 transition-colors"
+                  >
+                    {opt.label}
+                  </motion.button>
+                ))}
+              </div>
+              
+              <button 
+                onClick={() => setTaskToReschedule(null)}
+                className="w-full py-3 text-slate-400 font-bold hover:text-slate-600 transition-colors"
+              >
+                Cancelar
+              </button>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       <AnimatePresence>
         {activeNotice && (
           <NoticeModal 
@@ -2419,6 +2568,7 @@ export default function App() {
             setCategories={setCustomCategories}
             initialRole={roleFilter === 'all' ? 'student' : roleFilter}
             subjects={subjects}
+            accessToken={accessToken}
             onAddSubject={() => {
               setShowCreateModal(false);
               setShowSubjectModal(true);
@@ -3051,7 +3201,7 @@ function TaskCard({ task, subjects, onToggle, onDelete, onMove, onConfigureRemin
   );
 }
 
-function CreateTaskModal({ onClose, userId, categories, setCategories, onTaskCreated, initialRole, subjects, onAddSubject }: { onClose: () => void, userId: string, categories: string[], setCategories: (cats: string[]) => void, onTaskCreated?: (task: Task) => void, initialRole?: 'student' | 'teacher', subjects: Subject[], onAddSubject: () => void }) {
+function CreateTaskModal({ onClose, userId, categories, setCategories, onTaskCreated, initialRole, subjects, onAddSubject, accessToken }: { onClose: () => void, userId: string, categories: string[], setCategories: (cats: string[]) => void, onTaskCreated?: (task: Task) => void, initialRole?: 'student' | 'teacher', subjects: Subject[], onAddSubject: () => void, accessToken: string | null }) {
   const [title, setTitle] = useState('');
   const [date, setDate] = useState('');
   const [priority, setPriority] = useState<'low' | 'medium' | 'high'>('medium');

@@ -158,37 +158,42 @@ export function Sidebar({
           <div className="px-3 space-y-1 mb-6">
             {isOpen && <p className="px-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Menu</p>}
             {[
-              { id: 'home', label: 'Inicial', icon: <LayoutDashboard className="w-5 h-5" /> },
+              { id: 'home', label: 'Início', icon: <LayoutDashboard className="w-5 h-5" /> },
               { id: 'tasks', label: 'Tarefas', icon: <CheckSquare className="w-5 h-5" /> },
-              { id: 'kanban', label: 'Kanban', icon: <BookOpen className="w-5 h-5" /> },
-              { id: 'calendar', label: 'Calendário', icon: <Calendar className="w-5 h-5" /> },
-              { id: 'reminders', label: 'Lembretes', icon: <Bell className="w-5 h-5" /> },
+              { id: 'kanban', label: 'Quadro', icon: <BookOpen className="w-5 h-5" /> },
+              { id: 'calendar', label: 'Agenda', icon: <Calendar className="w-5 h-5" /> },
+              { id: 'reminders', label: 'Avisos', icon: <Bell className="w-5 h-5" /> },
               { id: 'notes', label: 'Notas', icon: <StickyNote className="w-5 h-5" /> },
-              { id: 'announcements', label: 'Avisos', icon: (
+              { id: 'announcements', label: 'Classroom', icon: (
                 <div className="relative">
                   <Megaphone className="w-5 h-5" />
                   <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full animate-pulse" />
                 </div>
               )},
             ].map(item => (
-              <button
+              <motion.button
                 key={item.id}
+                whileHover={{ x: 4, backgroundColor: activeTab === item.id && !selectedSubjectId ? 'rgba(59, 130, 246, 0.1)' : 'rgba(241, 245, 249, 1)' }}
+                whileTap={{ scale: 0.98 }}
                 onClick={() => handleTabClick(item.id)}
                 className={cn(
                   "w-full flex items-center rounded-xl font-medium transition-all group relative",
                   isOpen ? "px-4 py-3 gap-3" : "p-3 justify-center",
                   activeTab === item.id && !selectedSubjectId
-                    ? "bg-blue-50 text-blue-700"
-                    : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                    ? "bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400"
+                    : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
                 )}
                 title={!isOpen ? item.label : undefined}
               >
                 {item.icon}
                 {isOpen && <span className="truncate">{item.label}</span>}
                 {!isOpen && activeTab === item.id && !selectedSubjectId && (
-                  <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-blue-600 rounded-r-full" />
+                  <motion.div 
+                    layoutId="sidebarActive"
+                    className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-blue-600 rounded-r-full" 
+                  />
                 )}
-              </button>
+              </motion.button>
             ))}
           </div>
 

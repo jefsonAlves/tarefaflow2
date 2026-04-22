@@ -21,19 +21,27 @@ interface TaskCardProps {
   onEdit?: () => void;
   onConfigureReminder?: () => void;
   onAddNote?: () => void;
+  onSyncToCalendar?: () => void;
 }
 
-export function TaskCard({ task, onToggle, onDelete, onUpdateStatus, onEdit, onConfigureReminder, onAddNote }: TaskCardProps) {
+export function TaskCard({ 
+  task, 
+  onToggle, 
+  onDelete, 
+  onUpdateStatus, 
+  onEdit, 
+  onConfigureReminder, 
+  onAddNote,
+  onSyncToCalendar
+}: TaskCardProps) {
   const [showMenu, setShowMenu] = useState(false);
 
   const getStatusInfo = () => {
-    if (task.source !== 'classroom') return null;
-    
-    const status = task.submissionStatus;
-    if (status === 'TURNED_IN') return { label: 'Entregue', color: 'bg-green-100 text-green-700', icon: <CheckCircle2 className="w-3 h-3" /> };
+    const status = task.submissionStatus || (task.status === 'done' || task.completed ? 'TURNED_IN' : 'NEW');
+    if (status === 'TURNED_IN' || task.status === 'done' || task.completed) return { label: 'Entregue', color: 'bg-green-100 text-green-700', icon: <CheckCircle2 className="w-3 h-3" /> };
     if (status === 'RETURNED') return { label: 'Devolvido', color: 'bg-blue-100 text-blue-700', icon: <RefreshCw className="w-3 h-3" /> };
     if (status === 'RECLAIMED_BY_STUDENT') return { label: 'Retomado', color: 'bg-amber-100 text-amber-700', icon: <Clock className="w-3 h-3" /> };
-    return { label: 'Pendente', color: 'bg-slate-100 text-slate-700', icon: <AlertCircle className="w-3 h-3" /> };
+    return { label: 'Pendente', color: 'bg-slate-50 text-slate-500', icon: <AlertCircle className="w-3 h-3" /> };
   };
 
   const statusInfo = getStatusInfo();
@@ -220,6 +228,15 @@ export function TaskCard({ task, onToggle, onDelete, onUpdateStatus, onEdit, onC
                   className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
                 >
                   Editar Original
+                </button>
+              )}
+              {onSyncToCalendar && (
+                <button 
+                  onClick={() => { onSyncToCalendar(); setShowMenu(false); }}
+                  className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                >
+                  <RefreshCw className="w-4 h-4 text-slate-400 group-hover:rotate-180 transition-transform duration-500" />
+                  Sincronizar Agenda
                 </button>
               )}
               <div className="h-px bg-slate-100 my-1" />
