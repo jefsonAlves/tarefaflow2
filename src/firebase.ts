@@ -24,28 +24,15 @@ googleProvider.addScope('https://www.googleapis.com/auth/tasks');
 googleProvider.addScope('https://www.googleapis.com/auth/calendar');
 
 export const signIn = async () => {
-  const inIframe = window !== window.top;
-  const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-  
-  if (inIframe || !isMobile) {
-    // In iframe (AI Studio preview) or desktop, we MUST use popup
+  try {
     const result = await signInWithPopup(auth, googleProvider);
     const credential = GoogleAuthProvider.credentialFromResult(result);
     return { user: result.user, accessToken: credential?.accessToken };
-  } else {
-    // On mobile browsers (not in iframe), try popup first, fallback to redirect if blocked
-    try {
-      const result = await signInWithPopup(auth, googleProvider);
-      const credential = GoogleAuthProvider.credentialFromResult(result);
-      return { user: result.user, accessToken: credential?.accessToken };
-    } catch (error: any) {
-      if (error.code === 'auth/popup-blocked' || error.message.includes('popup')) {
-        console.log("Popup blocked on mobile, falling back to redirect...");
-        await signInWithRedirect(auth, googleProvider);
-        return { user: null, accessToken: null }; // Will be handled by getRedirectResult on reload
-      }
-      throw error;
+  } catch (error: any) {
+    if (error.code === 'auth/popup-blocked' || error.message.includes('popup')) {
+      throw new Error('O pop-up de login foi bloqueado pelo seu navegador. Por favor, permita pop-ups para este site ou abra no navegador padrão do sistema para fazer login.');
     }
+    throw error;
   }
 };
 

@@ -3346,9 +3346,9 @@ function CreateTaskModal({ onClose, userId, categories, setCategories, onTaskCre
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <label className="text-sm font-semibold text-slate-700">Data e Hora</label>
+              <label className="text-sm font-semibold text-slate-700">Data de Entrega (Prazo)</label>
               <input 
                 type="datetime-local" 
                 value={date}
