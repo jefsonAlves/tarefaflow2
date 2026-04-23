@@ -197,7 +197,6 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [initializationError, setInitializationError] = useState<string | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
-  const [userRole, setUserRole] = useState<'student' | 'teacher'>('student');
 
   // New: Announcements notification
   useEffect(() => {
@@ -754,6 +753,18 @@ export default function App() {
         ...doc.data()
       })) as Task[];
       setTasks(taskList);
+      
+      const hasStudent = taskList.some(t => t.role === 'student');
+      const hasTeacher = taskList.some(t => t.role === 'teacher' || t.courseId !== undefined);
+
+      setRoleFilter(prev => {
+        if (prev === 'all' || (!hasStudent && prev === 'student') || (!hasTeacher && prev === 'teacher')) {
+          // Force single view: default to teacher if they only have teacher tasks, else default to student
+          return (hasTeacher && !hasStudent) ? 'teacher' : 'student';
+        }
+        return prev;
+      });
+
     }, (error) => {
       handleFirestoreError(error, OperationType.GET, 'tasks');
     });
@@ -2109,17 +2120,28 @@ export default function App() {
             ) : activeTab === 'tasks' ? (
               <DragDropContext onDragEnd={handleDragEnd}>
                 <EnvironmentSwitcher 
-                  role={userRole} 
+                  role={roleFilter} 
                   setRole={(newRole) => {
-                    setUserRole(newRole);
                     setRoleFilter(newRole);
                   }} 
+                  hasStudent={tasks.some(t => t.role === 'student')}
+                  hasTeacher={tasks.some(t => t.role === 'teacher' || t.courseId !== undefined)}
+                  showAmbos={false}
                 />
                 <TaskDashboardSummary tasks={filteredTasks} />
                 {renderTaskGroup(filteredTasks, 'main')}
               </DragDropContext>
             ) : activeTab === 'kanban' ? (
               <DragDropContext onDragEnd={handleDragEnd}>
+                <EnvironmentSwitcher 
+                  role={roleFilter} 
+                  setRole={(newRole) => {
+                    setRoleFilter(newRole);
+                  }} 
+                  hasStudent={tasks.some(t => t.role === 'student')}
+                  hasTeacher={tasks.some(t => t.role === 'teacher' || t.courseId !== undefined)}
+                  showAmbos={false}
+                />
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                   {[
                     { id: 'todo', title: 'A Fazer', color: 'bg-slate-100', text: 'text-slate-700' },
@@ -3024,6 +3046,7 @@ function DiagnosticsPanel({ status, onClose, onReauth }: { status: any, onClose:
 }
 
 function TaskCard({ task, subjects, onToggle, onDelete, onMove, onConfigureReminder, onSyncToCalendar }: { task: Task, subjects: Subject[], onToggle: () => void | Promise<void>, onDelete: () => void | Promise<void>, onMove?: (id: string, newStatus: Task['status']) => void, onConfigureReminder?: () => void, onSyncToCalendar?: () => void, key?: any }) {
+  const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
   const getStatusInfo = () => {
     if (task.source === 'classroom_announcement') {
       return { label: 'Recado', color: 'bg-indigo-100 text-indigo-700', icon: <Bell className="w-3 h-3" /> };
@@ -3108,7 +3131,7 @@ function TaskCard({ task, subjects, onToggle, onDelete, onMove, onConfigureRemin
           )}
 
           {/* Due Date */}
-          {task.hasDueDate && task.source !== 'classroom_announcement' && (
+          {task.hasDueDate && task.source !== 'classroom_announcement' ? (
             <span className={cn(
               "px-2.5 py-1 rounded-lg uppercase tracking-wider flex items-center gap-1",
               isNearOverdue && !task.completed ? "bg-amber-100 text-amber-700 animate-pulse" : 
@@ -3117,9 +3140,14 @@ function TaskCard({ task, subjects, onToggle, onDelete, onMove, onConfigureRemin
               "bg-blue-50 text-blue-600"
             )}>
               <Clock className="w-3 h-3" />
-              {formatDate(task.dueDate)}
+              Prazo: {formatDate(task.dueDate)}
             </span>
-          )}
+          ) : task.source !== 'classroom_announcement' ? (
+            <span className="bg-slate-100 text-slate-500 px-2.5 py-1 rounded-lg uppercase tracking-wider flex items-center gap-1">
+              <Clock className="w-3 h-3" />
+              Criado em: {task.createdAt && typeof task.createdAt !== 'string' && task.createdAt.toDate ? formatDate(task.createdAt.toDate().toISOString()) : (task.createdAt ? formatDate(new Date(task.createdAt).toISOString()) : 'Sem data')}
+            </span>
+          ) : null}
         </div>
 
         {/* Task Title */}
@@ -3152,9 +3180,22 @@ function TaskCard({ task, subjects, onToggle, onDelete, onMove, onConfigureRemin
           )}
         </div>
         {task.description && (
-          <p className="text-xs text-slate-500 mt-2 line-clamp-2 italic bg-slate-50 p-2 rounded-lg border border-slate-100">
-            {task.source === 'classroom' ? 'Obs: ' : ''}{task.description}
-          </p>
+          <div className="mt-2 text-xs text-slate-500 italic bg-slate-50 p-2 rounded-lg border border-slate-100">
+            <p className={cn(
+              "custom-scrollbar overflow-y-auto whitespace-pre-wrap transition-all",
+              isDescriptionExpanded ? "max-h-60" : "max-h-[3.6rem] line-clamp-3"
+            )}>
+              {task.source === 'classroom' ? 'Obs: ' : ''}{task.description}
+            </p>
+            {task.description.length > 120 && (
+              <button 
+                onClick={(e) => { e.stopPropagation(); setIsDescriptionExpanded(!isDescriptionExpanded); }}
+                className="text-[10px] text-blue-600 hover:text-blue-700 font-bold mt-2 transition-colors inline-block"
+              >
+                {isDescriptionExpanded ? 'Mostrar menos' : 'Ver mais da descrição'}
+              </button>
+            )}
+          </div>
         )}
         <div className="flex items-center gap-3 mt-2">
           {task.alternateLink && (

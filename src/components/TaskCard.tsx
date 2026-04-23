@@ -35,6 +35,7 @@ export function TaskCard({
   onSyncToCalendar
 }: TaskCardProps) {
   const [showMenu, setShowMenu] = useState(false);
+  const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
 
   const getStatusInfo = () => {
     const status = task.submissionStatus || (task.status === 'done' || task.completed ? 'TURNED_IN' : 'NEW');
@@ -101,7 +102,7 @@ export function TaskCard({
             </span>
           )}
 
-          {task.hasDueDate && (
+          {task.hasDueDate ? (
             <span className={cn(
               "text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider flex items-center gap-1",
               isNearOverdue && !(task.completed || task.status === 'done') ? "bg-amber-100 text-amber-700 animate-pulse" : 
@@ -110,7 +111,12 @@ export function TaskCard({
               "bg-blue-50 text-blue-600"
             )}>
               <Clock className="w-3 h-3" />
-              {formatDate(task.dueDate)}
+              Prazo: {formatDate(task.dueDate)}
+            </span>
+          ) : (
+            <span className="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider flex items-center gap-1">
+              <Clock className="w-3 h-3" />
+              Criado em: {task.createdAt && typeof task.createdAt !== 'string' && task.createdAt.toDate ? formatDate(task.createdAt.toDate().toISOString()) : (task.createdAt ? formatDate(new Date(task.createdAt).toISOString()) : 'Sem data')}
             </span>
           )}
 
@@ -139,9 +145,22 @@ export function TaskCard({
           )}
         </div>
         {task.description && (
-          <p className="text-xs text-slate-500 mt-1 line-clamp-2 italic">
-            {task.source === 'classroom' ? 'Exigências: ' : ''}{task.description}
-          </p>
+          <div className="mt-2 pr-2">
+            <p className={cn(
+              "text-xs text-slate-500 italic custom-scrollbar overflow-y-auto whitespace-pre-wrap transition-all",
+              isDescriptionExpanded ? "max-h-60" : "max-h-16 line-clamp-3"
+            )}>
+              {task.source === 'classroom' ? 'Exigências: ' : ''}{task.description}
+            </p>
+            {task.description.length > 150 && (
+              <button 
+                onClick={(e) => { e.stopPropagation(); setIsDescriptionExpanded(!isDescriptionExpanded); }}
+                className="text-[10px] text-blue-600 hover:text-blue-700 font-bold mt-1 transition-colors"
+              >
+                {isDescriptionExpanded ? 'Mostrar menos' : 'Ver mais da descrição'}
+              </button>
+            )}
+          </div>
         )}
         <div className="flex items-center gap-3 mt-1">
           {task.reminderConfig && (
