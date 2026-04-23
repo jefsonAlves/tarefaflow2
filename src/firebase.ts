@@ -25,12 +25,19 @@ googleProvider.addScope('https://www.googleapis.com/auth/calendar');
 
 export const signIn = async () => {
   try {
-    const result = await signInWithPopup(auth, googleProvider);
-    const credential = GoogleAuthProvider.credentialFromResult(result);
-    return { user: result.user, accessToken: credential?.accessToken };
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone === true;
+    
+    if (isStandalone) {
+      await signInWithRedirect(auth, googleProvider);
+      return { user: null, accessToken: null }; // Will be handled by handleRedirectResult
+    } else {
+      const result = await signInWithPopup(auth, googleProvider);
+      const credential = GoogleAuthProvider.credentialFromResult(result);
+      return { user: result.user, accessToken: credential?.accessToken };
+    }
   } catch (error: any) {
     if (error.code === 'auth/popup-blocked' || error.message.includes('popup')) {
-      throw new Error('O pop-up de login foi bloqueado pelo seu navegador. Por favor, permita pop-ups para este site ou abra no navegador padrão do sistema para fazer login.');
+      throw new Error('O pop-up de login foi bloqueado pelo seu navegador móvel ou sistema. Por favor, permita pop-ups ou tente instalar o app na tela inicial para fazer login corretamente.');
     }
     throw error;
   }

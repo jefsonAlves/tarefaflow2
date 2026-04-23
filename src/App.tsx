@@ -540,18 +540,22 @@ export default function App() {
     
     // Check for redirect result
     handleRedirectResult().then((result) => {
-      if (result && result.accessToken) {
-        setAccessToken(result.accessToken);
-        try {
-          sessionStorage.setItem('google_access_token', result.accessToken);
-        } catch (e) {}
-        if ('Notification' in window && Notification.permission === 'default') {
-          Notification.requestPermission();
+      if (result && result.user) {
+        setUser(result.user);
+        if (result.accessToken) {
+          setAccessToken(result.accessToken);
+          try {
+            sessionStorage.setItem('google_access_token', result.accessToken);
+          } catch (e) {}
+          if ('Notification' in window && Notification.permission === 'default') {
+            Notification.requestPermission();
+          }
         }
       }
     }).catch((e: any) => {
       console.error("Redirect sign-in error details:", e);
       setAuthErrorMessage(`Erro ao fazer login: ${e.message || 'Erro desconhecido'}`);
+      setShowAuthModal(true);
     });
 
     return () => {
@@ -1224,8 +1228,9 @@ export default function App() {
 
   if (!user) {
     const userAgent = navigator.userAgent || navigator.vendor || (window as any).opera;
-    const isIOSWebView = /(iPhone|iPod|iPad).*AppleWebKit(?!.*Safari)/i.test(userAgent);
-    const isAndroidWebView = userAgent.includes('wv') || (userAgent.includes('Android') && userAgent.includes('Version/'));
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone === true;
+    const isIOSWebView = /(iPhone|iPod|iPad).*AppleWebKit(?!.*Safari)/i.test(userAgent) && !isStandalone;
+    const isAndroidWebView = (userAgent.includes('wv') || (userAgent.includes('Android') && userAgent.includes('Version/'))) && !isStandalone;
     const isSocialApp = userAgent.includes('Instagram') || userAgent.includes('FBAN') || userAgent.includes('FBAV');
     const isWebView = isIOSWebView || isAndroidWebView || isSocialApp;
 
