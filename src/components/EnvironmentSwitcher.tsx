@@ -1,4 +1,9 @@
 export function EnvironmentSwitcher({ role, setRole, hasStudent = true, hasTeacher = true, showAmbos = false }: { role: 'all' | 'student' | 'teacher', setRole: (role: 'all' | 'student' | 'teacher') => void, hasStudent?: boolean, hasTeacher?: boolean, showAmbos?: boolean }) {
+  // Only show the switcher if the user has BOTH environments
+  if (!(hasStudent && hasTeacher)) {
+    return null;
+  }
+
   return (
     <div className="flex bg-slate-100 p-1.5 rounded-xl mb-6 shadow-inner">
       {showAmbos && (hasStudent && hasTeacher) && (
@@ -26,11 +31,6 @@ export function EnvironmentSwitcher({ role, setRole, hasStudent = true, hasTeach
         >
           Ambiente: Professor
         </button>
-      )}
-      {!hasStudent && !hasTeacher && (
-        <div className="flex-1 py-2 px-4 rounded-lg text-sm font-bold text-center text-slate-400">
-          Nenhum ambiente detectado
-        </div>
       )}
     </div>
   );

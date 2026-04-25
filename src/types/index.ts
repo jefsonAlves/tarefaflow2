@@ -59,6 +59,8 @@ export interface Task {
   subjectId?: string;
   termId?: string;
   localNote?: string;
+  creatorName?: string;
+  creatorPhoto?: string;
 }
 
 export type StudentProfileType = 'school' | 'university';

@@ -192,7 +192,7 @@ export default function App() {
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [accessToken, setAccessToken] = useState<string | null>(() => {
     try {
-      return sessionStorage.getItem('google_access_token');
+      return localStorage.getItem('google_access_token');
     } catch (e) {
       console.warn("Session storage access failed:", e);
       return null;
@@ -230,7 +230,7 @@ export default function App() {
 
   const handleLogout = async () => {
     await logout();
-    sessionStorage.removeItem('google_access_token');
+    localStorage.removeItem('google_access_token');
     localStorage.removeItem('active_tab');
     setUser(null);
     setUserProfile(null);
@@ -549,7 +549,7 @@ export default function App() {
         if (result.accessToken) {
           setAccessToken(result.accessToken);
           try {
-            sessionStorage.setItem('google_access_token', result.accessToken);
+            localStorage.setItem('google_access_token', result.accessToken);
           } catch (e) {}
           if ('Notification' in window && Notification.permission === 'default') {
             Notification.requestPermission();
@@ -706,17 +706,19 @@ export default function App() {
 
   const handleSignIn = async () => {
     if (isLoggingIn) return;
-    setIsLoggingIn(true);
+    
     try {
+      // Must call signIn immediately in the event handler to preserve user gesture
       const result = await signIn();
+      setIsLoggingIn(true);
       if (result && result.user) {
         setUser(result.user);
         if (result.accessToken) {
           setAccessToken(result.accessToken);
           try {
-            sessionStorage.setItem('google_access_token', result.accessToken);
+            localStorage.setItem('google_access_token', result.accessToken);
           } catch (e) {
-            console.warn("Could not save access token to session storage:", e);
+            console.warn("Could not save access token to storage:", e);
           }
           if ('Notification' in window && Notification.permission === 'default') {
             Notification.requestPermission();
@@ -918,6 +920,10 @@ export default function App() {
 
   const filteredTasks = useMemo(() => {
     return tasks.filter(t => {
+      // Exclude classroom_announcements globally from filtered views (tasks, kanban, calendar)
+      // They are shown exclusively in the "Recados" / "Classroom" tab
+      if (t.source === 'classroom_announcement') return false;
+
       const matchesSearch = t.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
                            t.category.toLowerCase().includes(searchQuery.toLowerCase());
       const matchesSource = sourceFilter === 'all' || t.source === sourceFilter;
@@ -1372,7 +1378,7 @@ export default function App() {
             msg.toLowerCase().includes("credentials") ||
             res.status === 401) {
           setAccessToken(null);
-          sessionStorage.removeItem('google_access_token');
+          localStorage.removeItem('google_access_token');
           setAuthErrorMessage("Sua sessão do Google Calendar expirou ou as permissões são insuficientes. Por favor, reconecte sua conta.");
           setShowAuthModal(true);
         } else {
@@ -1716,6 +1722,8 @@ export default function App() {
               }
 
               const isCompleted = role === 'student' ? (submissionStatus === 'TURNED_IN' || submissionStatus === 'RETURNED') : false;
+              const isReturned = role === 'student' && submissionStatus === 'RETURNED';
+              
               const taskData: any = {
                 title: (work.title || 'Sem Título').substring(0, 500),
                 description: (work.description || '').substring(0, 2000),
@@ -1726,7 +1734,7 @@ export default function App() {
                 order: 1000,
                 priority: 'medium',
                 category: (course.name || 'Classroom').substring(0, 200),
-                source: 'classroom' as const,
+                source: isReturned ? 'classroom_announcement' : 'classroom',
                 externalId: work.id,
                 courseId: course.id,
                 userId: user.uid,
@@ -1785,6 +1793,10 @@ export default function App() {
             });
             const annData = await annRes.json();
             
+            if (!annRes.ok) {
+              throw new Error(annData.error || "Failed to fetch announcements");
+            }
+            
             if (annRes.ok && Array.isArray(annData)) {
               for (const ann of annData) {
                 if (ann.state === 'DELETED') continue;
@@ -1803,24 +1815,29 @@ export default function App() {
                       courseId: course.id,
                       externalId: ann.id,
                       userId: user.uid,
+                      role: course.role,
                       priority: 'medium',
                       completed: false,
                       status: 'todo',
                       dueDate: updateTime || new Date().toISOString(), // Use updatetime as dueDate to sort
                       createdAt: Timestamp.now(),
                       updateTime: updateTime,
-                      alternateLink: ann.alternateLink || null
+                      alternateLink: ann.alternateLink || null,
+                      creatorName: ann.creatorName || null,
+                      creatorPhoto: ann.creatorPhoto || null
                     });
                     totalImported++;
                   } catch (e) {
                     console.error("Failed to add announcement:", e);
                   }
-                } else if (existingAnn.updateTime !== updateTime) {
+                } else if (existingAnn.updateTime !== updateTime || (!existingAnn.creatorName && ann.creatorName)) {
                   try {
                     await updateDoc(doc(db, 'tasks', existingAnn.id), {
                       description: ann.text || '',
                       updateTime: updateTime,
-                      dueDate: updateTime || new Date().toISOString()
+                      dueDate: updateTime || new Date().toISOString(),
+                      creatorName: ann.creatorName || existingAnn.creatorName || null,
+                      creatorPhoto: ann.creatorPhoto || existingAnn.creatorPhoto || null
                     });
                     totalUpdated++;
                   } catch (e) {
@@ -1831,9 +1848,12 @@ export default function App() {
             }
           } catch (e: any) {
             console.warn(`Failed to fetch announcements for course ${course.id}:`, e);
+            if (e.message?.includes('403') || e.message?.toLowerCase().includes('permission') || e.message?.includes('insufficient')) {
+              throw new Error("Permissão insuficiente para ler os recados. Por favor, faça login novamente para autorizar.");
+            }
           }
         } catch (courseError: any) {
-          if (courseError.message?.includes("invalid authentication credentials") || courseError.message?.includes("Expected OAuth 2 access token")) {
+          if (courseError.message?.includes("invalid authentication credentials") || courseError.message?.includes("Expected OAuth 2 access token") || courseError.message?.includes("Permissão insuficiente")) {
             throw courseError;
           }
           console.error(`Error processing course ${course.id}:`, courseError);
@@ -1848,10 +1868,10 @@ export default function App() {
       
       let errorMessage = e.message || "Tente entrar novamente.";
       
-      if (errorMessage.includes("invalid authentication credentials") || errorMessage.includes("Expected OAuth 2 access token")) {
+      if (errorMessage.includes("invalid authentication credentials") || errorMessage.includes("Expected OAuth 2 access token") || errorMessage.includes("Permissão insuficiente")) {
         setAccessToken(null);
-        sessionStorage.removeItem('google_access_token');
-        setAuthErrorMessage("Sua sessão do Google expirou. Por favor, reconecte sua conta para sincronizar.");
+        localStorage.removeItem('google_access_token');
+        setAuthErrorMessage(errorMessage.includes("Permissão insuficiente") ? errorMessage : "Sua sessão do Google expirou. Por favor, reconecte sua conta para sincronizar.");
         setShowAuthModal(true);
         return;
       }
@@ -1875,7 +1895,7 @@ export default function App() {
           errorMessage.toLowerCase().includes("auth") || 
           errorMessage.toLowerCase().includes("credentials")) {
         setAccessToken(null);
-        sessionStorage.removeItem('google_access_token');
+        localStorage.removeItem('google_access_token');
         setAuthErrorMessage("Sua sessão do Google expirou ou as permissões são insuficientes. Por favor, reconecte sua conta.");
         setShowAuthModal(true);
       }
@@ -2134,7 +2154,7 @@ export default function App() {
           >
             {activeTab === 'home' ? (
               <HomeDashboard
-                tasks={filteredTasks}
+                tasks={tasks}
                 notices={notices}
                 userProfile={userProfile}
                 setActiveTab={setActiveTab}
@@ -2230,9 +2250,9 @@ export default function App() {
                 onDeleteTerm={deleteTerm}
               />
             ) : activeTab === 'teacher-inbox' ? (
-              <TeacherDashboard tasks={tasks} subjects={subjects} />
+              <TeacherDashboard tasks={tasks} subjects={subjects} isSyncing={isSyncing} onSyncClassroom={syncClassroom} />
             ) : activeTab === 'announcements' ? (
-              <AnnouncementsView tasks={tasks} subjects={subjects} />
+              <AnnouncementsView tasks={tasks} subjects={subjects} onToggle={toggleTask} />
             ) : activeTab === 'admin' && userProfile?.role_user === 'admin' ? (
               <AdminPanel 
                 users={allUsers}
@@ -3175,9 +3195,16 @@ function TaskCard({ task, subjects, onToggle, onDelete, onMove, onConfigureRemin
         </div>
 
         {/* Task Title */}
-        <h3 className={cn("text-base font-bold text-slate-800 line-clamp-2 pr-4 leading-tight", task.completed && "line-through text-slate-400")}>
-          {task.title.replace(/^\[(ALUNO|PROF)\]\s*/i, '')}
-        </h3>
+        <div className="flex items-center gap-2">
+          {task.source === 'classroom_announcement' && task.creatorPhoto && (
+            <img src={task.creatorPhoto} alt={task.creatorName || "Prof"} className="w-5 h-5 rounded-full object-cover shrink-0" />
+          )}
+          <h3 className={cn("text-base font-bold text-slate-800 line-clamp-2 pr-4 leading-tight", task.completed && "line-through text-slate-400")}>
+            {task.source === 'classroom_announcement' && task.creatorName ? 
+              `${task.creatorName}: ${task.title.replace(/^\[(ALUNO|PROF)\]\s*/i, '').replace('Recado: ', '')}` : 
+              task.title.replace(/^\[(ALUNO|PROF)\]\s*/i, '')}
+          </h3>
+        </div>
 
         {/* Metadata Footer */}
         <div className="flex items-center gap-2 mt-1.5 flex-wrap">

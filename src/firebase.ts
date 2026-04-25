@@ -15,6 +15,7 @@ googleProvider.setCustomParameters({ prompt: 'select_account' });
 
 // Add Classroom and Tasks scopes
 googleProvider.addScope('https://www.googleapis.com/auth/classroom.courses.readonly');
+googleProvider.addScope('https://www.googleapis.com/auth/classroom.announcements.readonly');
 googleProvider.addScope('https://www.googleapis.com/auth/classroom.coursework.me.readonly');
 googleProvider.addScope('https://www.googleapis.com/auth/classroom.coursework.me');
 googleProvider.addScope('https://www.googleapis.com/auth/classroom.coursework.students.readonly');

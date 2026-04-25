@@ -9,9 +9,11 @@ import { ptBR } from 'date-fns/locale';
 interface TeacherDashboardProps {
   tasks: Task[];
   subjects: Subject[];
+  isSyncing?: boolean;
+  onSyncClassroom?: () => void;
 }
 
-export function TeacherDashboard({ tasks, subjects }: TeacherDashboardProps) {
+export function TeacherDashboard({ tasks, subjects, isSyncing, onSyncClassroom }: TeacherDashboardProps) {
   const [selectedTaskId, setSelectedTaskId] = React.useState<string | null>(null);
 
   // Get all courses/tasks where the user is a teacher
@@ -84,9 +86,9 @@ export function TeacherDashboard({ tasks, subjects }: TeacherDashboardProps) {
             </div>
           ) : (
             <div className="space-y-3">
-              {recentSubmissions.map(task => (
+              {recentSubmissions.map((task, idx) => (
                 <motion.div 
-                  key={task.id}
+                  key={`${task.id}-${idx}`}
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   onClick={() => setSelectedTaskId(selectedTaskId === task.id ? null : task.id)}
@@ -168,23 +170,46 @@ export function TeacherDashboard({ tasks, subjects }: TeacherDashboardProps) {
           </div>
 
           <div className="bg-indigo-50 p-4 rounded-2xl">
-            <p className="text-xs text-indigo-800 mb-4 flex gap-2">
-              <AlertCircle className="w-4 h-4 shrink-0" />
-              <span>Para ver os comentários dos alunos ou responder dúvidas, acesse diretamente o Google Classroom usando os links abaixo.</span>
-            </p>
+            <div className="flex flex-col gap-3 mb-6">
+              <p className="text-xs text-indigo-800 flex items-start gap-2 bg-indigo-100/50 p-3 justify-center items-center rounded-xl border border-indigo-100 font-medium">
+                <AlertCircle className="w-5 h-5 shrink-0 text-indigo-600" />
+                <span>Para liberar o acesso as mensagens e recado clique no botão abaixo e autorize o acesso do app as mensagens do classroom. O acesso é feito de forma segura para garantir a proteção de seus dados e sincronizar corretamente as atribuições e comunicados.</span>
+              </p>
+              {onSyncClassroom && (
+                <button
+                  onClick={onSyncClassroom}
+                  disabled={isSyncing}
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold py-2.5 px-4 rounded-xl shadow-sm shadow-indigo-200 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center mx-auto"
+                >
+                  {isSyncing ? 'Sincronizando...' : 'Autorizar e Sincronizar Classroom'}
+                </button>
+              )}
+            </div>
             
             <div className="space-y-3">
               {allAnnouncements.length === 0 ? (
                 <p className="text-sm font-medium text-indigo-400 text-center py-4">Nenhum recado recente.</p>
               ) : (
-                allAnnouncements.slice(0, 5).map(ann => (
-                  <div key={ann.id} className="bg-white/80 p-3 rounded-xl shadow-sm space-y-2">
-                    <p className="font-bold text-sm text-slate-800 truncate">{ann.category}</p>
+                allAnnouncements.slice(0, 5).map((ann, i) => (
+                  <div key={`${ann.id}-${i}`} className="bg-white/80 p-3 rounded-xl shadow-sm space-y-2">
+                    <div className="flex items-center gap-2 mb-2">
+                       {ann.creatorPhoto ? (
+                         <img src={ann.creatorPhoto} alt={ann.creatorName || "Creator"} className="w-6 h-6 rounded-full object-cover shrink-0" />
+                       ) : (
+                         <div className="w-6 h-6 bg-indigo-100 rounded-full flex items-center justify-center shrink-0">
+                           <MessageSquare className="w-3 h-3 text-indigo-600" />
+                         </div>
+                       )}
+                       <div className="min-w-0 flex-1">
+                         <p className="font-bold text-xs text-slate-800 truncate">{ann.creatorName ? `${ann.creatorName}` : ann.category}</p>
+                         {ann.creatorName && <p className="text-[10px] text-slate-500 truncate">{ann.category}</p>}
+                       </div>
+                    </div>
                     <p className="text-xs text-slate-600 line-clamp-3">{ann.description}</p>
                     
                     <div className="flex items-center justify-between mt-2 pt-2 border-t border-indigo-100/50">
                       <span className="text-[10px] font-medium text-slate-400">
-                        {format(new Date(ann.dueDate || ann.createdAt?.toMillis?.() || Date.now()), "dd 'de' MMM", { locale: ptBR })}
+                        {format(new Date(ann.updateTime || ann.dueDate || ann.createdAt?.toMillis?.() || Date.now()), "dd 'de' MMM 'às' HH:mm", { locale: ptBR })}
                       </span>
                       {ann.alternateLink && (
                         <a 

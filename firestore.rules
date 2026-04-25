@@ -51,7 +51,7 @@ service cloud.firestore {
         'description', 'externalId', 'courseId', 'role', 'submissionStatus', 
         'submissionCount', 'teacherSubmissions', 'assignedGrade', 'maxPoints', 'alternateLink', 'updateTime', 
         'updatedAt', 'lastSyncAt', 'createdAt', 'calendarEventId', 'reminderConfig', 'syncError',
-        'order', 'status', 'hasDueDate', 'subjectId', 'termId', 'localNote'
+        'order', 'status', 'hasDueDate', 'subjectId', 'termId', 'localNote', 'creatorName', 'creatorPhoto'
       ];
       let allFields = requiredFields.concat(optionalFields);
 
@@ -82,6 +82,8 @@ service cloud.firestore {
              (!('subjectId' in data) || data.subjectId == null || data.subjectId is string) &&
              (!('termId' in data) || data.termId == null || data.termId is string) &&
              (!('localNote' in data) || data.localNote == null || data.localNote is string) &&
+             (!('creatorName' in data) || data.creatorName == null || data.creatorName is string) &&
+             (!('creatorPhoto' in data) || data.creatorPhoto == null || data.creatorPhoto is string) &&
              (!('status' in data) || data.status == null || data.status in ['pending', 'in-progress', 'completed', 'todo', 'done', 'archived']);
     }
 

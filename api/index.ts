@@ -57,8 +57,32 @@ app.post("/api/google/classroom/announcements", async (req, res) => {
     const auth = new OAuth2Client();
     auth.setCredentials({ access_token: accessToken });
     const classroom = google.classroom({ version: "v1", auth });
-    const response = await classroom.courses.announcements.list({ courseId });
-    res.json(response.data.announcements || []);
+    const response = await classroom.courses.announcements.list({ courseId, pageSize: 50 });
+    
+    const announcements = response.data.announcements || [];
+    const profiles: Record<string, {name?: string, photo?: string}> = {};
+    
+    for (let ann of announcements) {
+      if (ann.creatorUserId) {
+        if (!profiles[ann.creatorUserId]) {
+          try {
+            const p = await classroom.userProfiles.get({ userId: ann.creatorUserId });
+            profiles[ann.creatorUserId] = {
+              name: p.data.name?.fullName,
+              photo: p.data.photoUrl
+            };
+          } catch(e) {
+            console.error("Error fetching creator profile:", e);
+          }
+        }
+        if (profiles[ann.creatorUserId]) {
+          (ann as any).creatorName = profiles[ann.creatorUserId].name;
+          (ann as any).creatorPhoto = profiles[ann.creatorUserId].photo;
+        }
+      }
+    }
+
+    res.json(announcements);
   } catch (error: any) {
     console.error(`Classroom API Error (Announcements) for course ${courseId}:`, error);
     const message = error.response?.data?.error?.message || error.message || "Failed to fetch announcements";

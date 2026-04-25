@@ -1,22 +1,30 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { motion } from 'motion/react';
 import { Task, Subject } from '../types';
 import { MessageSquare, AlertCircle, ChevronRight, Bell } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { EnvironmentSwitcher } from './EnvironmentSwitcher';
 
 interface AnnouncementsViewProps {
   tasks: Task[];
   subjects: Subject[];
+  onToggle: (task: Task) => void;
 }
 
-export function AnnouncementsView({ tasks, subjects }: AnnouncementsViewProps) {
+export function AnnouncementsView({ tasks, subjects, onToggle }: AnnouncementsViewProps) {
+  const [roleFilter, setRoleFilter] = useState<'all' | 'student' | 'teacher'>('all');
+
   const announcements = useMemo(() => {
     return tasks
-      .filter(t => t.source === 'classroom_announcement')
+      .filter(t => t.source === 'classroom_announcement' && !t.completed)
+      .filter(t => roleFilter === 'all' || t.role === roleFilter)
       .sort((a, b) => new Date(b.updateTime || b.createdAt?.toMillis?.() || 0).getTime() - new Date(a.updateTime || a.createdAt?.toMillis?.() || 0).getTime());
-  }, [tasks]);
+  }, [tasks, roleFilter]);
+
+  const hasStudent = useMemo(() => tasks.some(t => t.role === 'student'), [tasks]);
+  const hasTeacher = useMemo(() => tasks.some(t => t.role === 'teacher'), [tasks]);
 
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
@@ -27,6 +35,14 @@ export function AnnouncementsView({ tasks, subjects }: AnnouncementsViewProps) {
         </h1>
         <p className="text-slate-500 mt-1">Mensagens e recados importantes das suas turmas.</p>
       </header>
+
+      <EnvironmentSwitcher 
+        role={roleFilter} 
+        setRole={setRoleFilter} 
+        hasStudent={hasStudent} 
+        hasTeacher={hasTeacher} 
+        showAmbos={true}
+      />
 
       {announcements.length === 0 ? (
         <div className="bg-white p-10 rounded-3xl border border-dashed border-slate-200 text-center flex flex-col items-center justify-center">
@@ -40,7 +56,7 @@ export function AnnouncementsView({ tasks, subjects }: AnnouncementsViewProps) {
             const subject = subjects.find(s => s.id === ann.subjectId);
             return (
               <motion.div 
-                key={ann.id}
+                key={`${ann.id}-${i}`}
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.05 }}
@@ -48,12 +64,19 @@ export function AnnouncementsView({ tasks, subjects }: AnnouncementsViewProps) {
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-amber-50 rounded-xl flex items-center justify-center shrink-0">
-                      <MessageSquare className="w-5 h-5 text-amber-600" />
-                    </div>
+                    {ann.creatorPhoto ? (
+                      <img src={ann.creatorPhoto} alt={ann.creatorName || "Creator"} className="w-10 h-10 rounded-xl object-cover shrink-0" />
+                    ) : (
+                      <div className="w-10 h-10 bg-amber-50 rounded-xl flex items-center justify-center shrink-0">
+                        <MessageSquare className="w-5 h-5 text-amber-600" />
+                      </div>
+                    )}
                     <div>
-                      <h3 className="font-bold text-slate-800 tracking-tight">{ann.category || 'Mural do Google Classroom'}</h3>
+                      <h3 className="font-bold text-slate-800 tracking-tight">
+                        {ann.creatorName ? `${ann.creatorName}` : (ann.category || 'Mural do Google Classroom')}
+                      </h3>
                       <p className="text-xs font-medium text-slate-500">
+                        {ann.creatorName ? `${ann.category || 'Mural'} • ` : ''}
                         {format(new Date(ann.updateTime || ann.createdAt?.toMillis?.() || Date.now()), "dd 'de' MMMM 'às' HH:mm", { locale: ptBR })}
                       </p>
                     </div>
@@ -67,10 +90,19 @@ export function AnnouncementsView({ tasks, subjects }: AnnouncementsViewProps) {
                 </div>
 
                 <div className="pl-0 sm:pl-13 text-slate-600 text-sm leading-relaxed whitespace-pre-wrap">
-                  {ann.description || ann.title}
+                  {!ann.title.startsWith('Recado:') && (
+                    <div className="font-bold text-slate-800 mb-2">{ann.title}</div>
+                  )}
+                  {ann.description || (!ann.title.startsWith('Recado:') ? '' : ann.title)}
                 </div>
 
-                <div className="pl-0 sm:pl-13 flex justify-end">
+                <div className="pl-0 sm:pl-13 flex flex-wrap justify-end gap-2 mt-2">
+                  <button
+                    onClick={() => onToggle(ann)}
+                    className="inline-flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-xl text-sm font-bold transition-colors"
+                  >
+                    Marcar como Lido
+                  </button>
                   {ann.alternateLink && (
                     <a 
                       href={ann.alternateLink}
