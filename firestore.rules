@@ -49,7 +49,7 @@ service cloud.firestore {
       let requiredFields = ['title', 'dueDate', 'completed', 'priority', 'category', 'source', 'userId'];
       let optionalFields = [
         'description', 'externalId', 'courseId', 'role', 'submissionStatus', 
-        'submissionCount', 'assignedGrade', 'maxPoints', 'alternateLink', 'updateTime', 
+        'submissionCount', 'teacherSubmissions', 'assignedGrade', 'maxPoints', 'alternateLink', 'updateTime', 
         'updatedAt', 'lastSyncAt', 'createdAt', 'calendarEventId', 'reminderConfig', 'syncError',
         'order', 'status', 'hasDueDate', 'subjectId', 'termId', 'localNote'
       ];
@@ -70,6 +70,7 @@ service cloud.firestore {
              (!('role' in data) || data.role == null || data.role in ['student', 'teacher']) &&
              (!('submissionStatus' in data) || data.submissionStatus == null || data.submissionStatus is string) &&
              (!('submissionCount' in data) || data.submissionCount == null || data.submissionCount is map) &&
+             (!('teacherSubmissions' in data) || data.teacherSubmissions == null || data.teacherSubmissions is list) &&
              (!('assignedGrade' in data) || data.assignedGrade == null || data.assignedGrade is number) &&
              (!('maxPoints' in data) || data.maxPoints == null || data.maxPoints is number) &&
              (!('alternateLink' in data) || data.alternateLink == null || data.alternateLink is string) &&

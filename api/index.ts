@@ -75,12 +75,57 @@ app.post("/api/google/classroom/submissions", async (req, res) => {
     auth.setCredentials({ access_token: accessToken });
     const classroom = google.classroom({ version: "v1", auth });
     
+    // 1. Fetch submissions
     const response = await classroom.courses.courseWork.studentSubmissions.list({ 
       courseId, 
       courseWorkId,
       userId: role === 'teacher' ? '-' : 'me'
     });
-    res.json(response.data.studentSubmissions || []);
+    const submissions = response.data.studentSubmissions || [];
+
+    // 2. If teacher, fetch students to map names
+    if (role === 'teacher' && submissions.length > 0) {
+      try {
+        const rosterRes = await classroom.courses.students.list({ courseId });
+        const students = rosterRes.data.students || [];
+        const studentMap = new Map();
+        students.forEach((s: any) => {
+          if (s.profile) {
+            studentMap.set(s.userId, {
+              name: s.profile.name?.fullName || 'Aluno',
+              photoUrl: s.profile.photoUrl || null
+            });
+          }
+        });
+
+        // Enrich submissions
+        const enriched = submissions.map((sub: any) => {
+          let attachments = [];
+          if (sub.assignmentSubmission?.attachments) {
+             attachments = sub.assignmentSubmission.attachments.map((a: any) => {
+               if (a.driveFile) return { type: 'drive', title: a.driveFile.title, link: a.driveFile.alternateLink };
+               if (a.link) return { type: 'link', title: a.link.title, link: a.link.url };
+               if (a.youtubeVideo) return { type: 'youtube', title: a.youtubeVideo.title, link: a.youtubeVideo.alternateLink };
+               if (a.form) return { type: 'form', title: a.form.title, link: a.form.formUrl };
+               return { type: 'unknown', title: 'Anexo', link: null };
+             });
+          }
+          return {
+            ...sub,
+            studentProfile: studentMap.get(sub.userId) || { name: 'Aluno Desconhecido', photoUrl: null },
+            shortAnswer: sub.shortAnswerSubmission?.answer || null,
+            multipleChoice: sub.multipleChoiceSubmission?.answerId || null,
+            attachments
+          };
+        });
+        return res.json(enriched);
+      } catch (rosterErr) {
+        console.warn("Could not fetch roster for mapping names:", rosterErr);
+        return res.json(submissions); // Fallback to raw submissions
+      }
+    }
+
+    res.json(submissions);
   } catch (error: any) {
     console.error("Classroom API Error (Submissions):", error);
     const message = error.response?.data?.error?.message || error.message || "Failed to fetch submissions";

@@ -41,6 +41,7 @@ export interface Task {
   role?: 'student' | 'teacher';
   submissionStatus?: 'TURNED_IN' | 'RETURNED' | 'NEW' | 'RECLAIMED_BY_STUDENT';
   submissionCount?: { turnedIn: number, total: number };
+  teacherSubmissions?: any[];
   maxPoints?: number;
   assignedGrade?: number;
   alternateLink?: string;

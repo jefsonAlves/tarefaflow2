@@ -19,6 +19,7 @@ googleProvider.addScope('https://www.googleapis.com/auth/classroom.coursework.me
 googleProvider.addScope('https://www.googleapis.com/auth/classroom.coursework.me');
 googleProvider.addScope('https://www.googleapis.com/auth/classroom.coursework.students.readonly');
 googleProvider.addScope('https://www.googleapis.com/auth/classroom.student-submissions.me.readonly');
+googleProvider.addScope('https://www.googleapis.com/auth/classroom.student-submissions.students.readonly');
 googleProvider.addScope('https://www.googleapis.com/auth/classroom.rosters.readonly');
 googleProvider.addScope('https://www.googleapis.com/auth/tasks');
 googleProvider.addScope('https://www.googleapis.com/auth/calendar');

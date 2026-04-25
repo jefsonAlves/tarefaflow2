@@ -30,7 +30,11 @@ import {
   Trash2,
   Zap,
   Info,
-  CalendarPlus
+  CalendarPlus,
+  Users,
+  User as UserIcon,
+  Paperclip,
+  Link
 } from 'lucide-react';
 import { cn, formatDate } from './lib/utils';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
@@ -1670,6 +1674,7 @@ export default function App() {
               let submissionStatus: any = null;
               let assignedGrade: number | null = null;
               let submissionCount: { turnedIn: number, total: number } | null = null;
+              let teacherSubmissions: any = null;
 
               try {
                 const subRes = await fetchWithRetry('/api/google/classroom/submissions', {
@@ -1689,6 +1694,18 @@ export default function App() {
                   } else if (role === 'teacher') {
                     const turnedIn = subData.filter((s: any) => s.state === 'TURNED_IN' || s.state === 'RETURNED').length;
                     submissionCount = { turnedIn, total: subData.length };
+                    teacherSubmissions = subData.map((s: any) => ({
+                      userId: s.userId,
+                      state: s.state,
+                      assignedGrade: s.assignedGrade !== undefined ? s.assignedGrade : null,
+                      name: s.studentProfile?.name || 'Aluno Desconhecido',
+                      photoUrl: s.studentProfile?.photoUrl || null,
+                      shortAnswer: s.shortAnswer || null,
+                      multipleChoice: s.multipleChoice || null,
+                      attachments: s.attachments || [],
+                      alternateLink: s.alternateLink || null,
+                      updateTime: s.updateTime || null
+                    }));
                   }
                 }
               } catch (e: any) {
@@ -1716,6 +1733,7 @@ export default function App() {
                 role: role,
                 submissionStatus,
                 submissionCount,
+                teacherSubmissions,
                 assignedGrade,
                 maxPoints: work.maxPoints !== undefined ? work.maxPoints : null,
                 alternateLink: work.alternateLink || null,
@@ -1742,7 +1760,8 @@ export default function App() {
                 const hasChanged = 
                   existingTask.updateTime !== updateTime || 
                   existingTask.submissionStatus !== submissionStatus ||
-                  existingTask.assignedGrade !== assignedGrade;
+                  existingTask.assignedGrade !== assignedGrade ||
+                  (role === 'teacher' && JSON.stringify(existingTask.teacherSubmissions) !== JSON.stringify(teacherSubmissions));
 
                 if (hasChanged) {
                   try {
@@ -3202,7 +3221,101 @@ function TaskCard({ task, subjects, onToggle, onDelete, onMove, onConfigureRemin
             )}
           </div>
         )}
-        <div className="flex items-center gap-3 mt-2">
+
+        {task.role === 'teacher' && task.teacherSubmissions && task.teacherSubmissions.length > 0 && (
+          <div className="mt-3 bg-white p-3 rounded-xl border border-slate-100 shadow-sm text-xs">
+            <h4 className="font-bold text-slate-800 mb-2 flex items-center gap-1.5 border-b border-slate-50 pb-2">
+              <Users className="w-3.5 h-3.5 text-blue-500" />
+              Status dos Alunos
+            </h4>
+            <div className="space-y-2 max-h-40 overflow-y-auto custom-scrollbar">
+              {task.teacherSubmissions
+                .sort((a: any, b: any) => {
+                  const dateA = a.updateTime ? new Date(a.updateTime).getTime() : 0;
+                  const dateB = b.updateTime ? new Date(b.updateTime).getTime() : 0;
+                  return dateB - dateA;
+                })
+                .map((sub: any, idx: number) => (
+                <div key={idx} className="flex flex-col gap-1 bg-slate-50 p-2 rounded-lg">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      {sub.photoUrl ? (
+                        <img src={sub.photoUrl} alt="avatar" className="w-5 h-5 rounded-full" />
+                      ) : (
+                        <div className="w-5 h-5 bg-slate-200 rounded-full flex items-center justify-center shrink-0">
+                          <UserIcon className="w-3 h-3 text-slate-400" />
+                        </div>
+                      )}
+                      <span className="font-medium text-slate-700 truncate max-w-[120px]">{sub.name}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className={cn(
+                        "text-[10px] px-2 py-0.5 rounded-md font-bold",
+                        sub.state === 'TURNED_IN' ? 'bg-green-100 text-green-700' :
+                        sub.state === 'RETURNED' ? 'bg-blue-100 text-blue-700' :
+                        sub.state === 'RECLAIMED_BY_STUDENT' ? 'bg-amber-100 text-amber-700' :
+                        'bg-slate-200 text-slate-600'
+                      )}>
+                        {sub.state === 'TURNED_IN' ? 'Entregue' :
+                         sub.state === 'RETURNED' ? 'Devolvido' :
+                         sub.state === 'RECLAIMED_BY_STUDENT' ? 'Retomado' :
+                         'Pendente'}
+                      </span>
+                      {sub.assignedGrade !== null && sub.assignedGrade !== undefined && (
+                        <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded">
+                          Nota: {sub.assignedGrade}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  {sub.shortAnswer && (
+                    <div className="mt-1 text-slate-600 bg-white p-2 text-[11px] rounded border border-slate-200 shadow-sm relative">
+                      <span className="font-semibold block mb-1">Resposta:</span>
+                      {sub.shortAnswer.split('\n').map((line: string, i: number) => (
+                         <span key={i}>{line}<br /></span>
+                      ))}
+                    </div>
+                  )}
+                  {sub.multipleChoice && (
+                    <div className="mt-1 text-slate-600 bg-white p-2 text-[11px] rounded border border-slate-200 shadow-sm relative">
+                      <span className="font-semibold block">Escolha/Opção selecionada:</span>
+                      {sub.multipleChoice}
+                    </div>
+                  )}
+                  {sub.attachments && sub.attachments.length > 0 && (
+                    <div className="mt-1 space-y-1">
+                      <span className="text-[10px] font-semibold text-slate-500">Anexos:</span>
+                      {sub.attachments.map((att: any, aIdx: number) => (
+                         <a key={aIdx} href={att.link} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 p-1.5 bg-white border border-slate-200 rounded text-[11px] text-blue-600 hover:bg-blue-50 transition-colors">
+                           {att.type === 'link' ? <Link className="w-3 h-3 shrink-0" /> : <Paperclip className="w-3 h-3 shrink-0" />}
+                           <span className="truncate">{att.title}</span>
+                         </a>
+                      ))}
+                    </div>
+                  )}
+                  <div className="flex items-center justify-end gap-2 mt-1">
+                    {sub.alternateLink && (
+                      <a href={sub.alternateLink} target="_blank" rel="noreferrer" className="text-[9px] text-blue-500 hover:underline flex items-center gap-1">
+                        <ExternalLink className="w-2.5 h-2.5" /> Abrir
+                      </a>
+                    )}
+                    {sub.updateTime && (
+                      <div className="text-[9px] text-slate-400 flex items-center gap-1">
+                         <Clock className="w-2.5 h-2.5" />
+                         {new Date(sub.updateTime).toLocaleString(undefined, {
+                           day: '2-digit', month: '2-digit', year: 'numeric',
+                           hour: '2-digit', minute: '2-digit'
+                         })}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="flex items-center gap-3 mt-2 flex-wrap">
           {task.alternateLink && (
             <a 
               href={task.alternateLink} 
