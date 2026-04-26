@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch:
 
 jobs:
   build-android:
@@ -20,9 +21,16 @@ jobs:
 
       - name: Install dependencies
         run: npm install
+        
+      - name: Type Check (Lint)
+        run: npm run lint
 
       - name: Build Web App
         run: npm run build
+        # env:
+        #   Se você adicionar variáveis de ambiente importantes no futuro (ex: VITE_API_KEY),
+        #   configure-as aqui usando GitHub Secrets, por exemplo:
+        #   VITE_API_KEY: ${{ secrets.VITE_API_KEY }}
 
       - name: Sync Capacitor Android
         run: npx cap sync android
