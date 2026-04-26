@@ -41,8 +41,10 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Make gradlew executable
-        run: chmod +x android/gradlew
+      - name: Make gradlew executable and fix Wrapper
+        run: |
+          chmod +x android/gradlew
+          curl -o android/gradle/wrapper/gradle-wrapper.jar https://raw.githubusercontent.com/gradle/gradle/v8.10.2/gradle/wrapper/gradle-wrapper.jar
 
       - name: Build Android Debug APK
         working-directory: ./android
