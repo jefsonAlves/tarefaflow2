@@ -1283,6 +1283,25 @@ export default function App() {
                 )}
                 {isLoggingIn ? 'Iniciando login...' : (isNativeApp() ? 'Acessar dentro do aplicativo' : 'Entrar com Google')}
               </button>
+
+              <div className="text-xs text-slate-500 text-center px-4 bg-slate-100 rounded-lg py-2">
+                <strong>Importante:</strong> Para sincronizar suas tarefas com o Google Agenda e Classroom, você deve entrar usando uma conta do Google (Gmail).
+              </div>
+
+              <div className="grid grid-cols-3 gap-3 pt-2 opacity-50">
+                <button disabled className="py-3 bg-white border border-slate-200 rounded-xl flex items-center justify-center hover:bg-slate-50 transition-colors" title="Em breve">
+                  {/* Facebook logo */}
+                  <svg className="w-5 h-5 text-[#1877F2]" fill="currentColor" viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.469h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.469h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
+                </button>
+                <button disabled className="py-3 bg-white border border-slate-200 rounded-xl flex items-center justify-center hover:bg-slate-50 transition-colors" title="Em breve">
+                  {/* Github logo */}
+                  <svg className="w-5 h-5 text-slate-900" fill="currentColor" viewBox="0 0 24 24"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
+                </button>
+                <button disabled className="py-3 bg-white border border-slate-200 rounded-xl flex items-center justify-center hover:bg-slate-50 transition-colors" title="Em breve">
+                  {/* Twitter/X logo */}
+                  <svg className="w-4 h-4 text-slate-900" fill="currentColor" viewBox="0 0 1200 1227"><path d="M714.163 519.284L1160.89 0H1055.03L667.137 450.887L357.328 0H0L468.492 681.821L0 1226.37H105.866L515.491 750.218L842.672 1226.37H1200L714.137 519.284H714.163ZM569.165 687.828L521.697 619.934L144.011 79.6944H306.615L611.412 515.685L658.88 583.579L1055.08 1150.3H892.476L569.165 687.854V687.828Z"/></svg>
+                </button>
+              </div>
             </div>
           )}
 
