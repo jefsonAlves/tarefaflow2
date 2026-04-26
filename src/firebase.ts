@@ -32,7 +32,17 @@ export const isBlockedInAppBrowser = () => {
   if (isNativeApp()) return false;
 
   const ua = navigator.userAgent || '';
-  const blockedBrowsers = ['FBAN', 'FBAV', 'Instagram', 'Line/', 'TikTok', 'Twitter', 'Snapchat', 'Pinterest', 'LinkedInApp'];
+  const blockedBrowsers = [
+    'FBAN',
+    'FBAV',
+    'Instagram',
+    'Line/',
+    'TikTok',
+    'Twitter',
+    'Snapchat',
+    'Pinterest',
+    'LinkedInApp'
+  ];
 
   return blockedBrowsers.some(browser => ua.includes(browser));
 };

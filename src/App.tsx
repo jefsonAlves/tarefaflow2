@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { useState, useEffect, useMemo, Component } from 'react';
-import { auth, signIn, handleRedirectResult, db, logout } from './firebase';
+import { auth, signIn, handleRedirectResult, db, logout, isBlockedInAppBrowser, isNativeApp } from './firebase';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { collection, query, where, onSnapshot, orderBy, addDoc, updateDoc, doc, deleteDoc, Timestamp, getDoc, setDoc, getDocFromServer, deleteField } from 'firebase/firestore';
 import { motion, AnimatePresence } from 'motion/react';
@@ -1239,10 +1239,7 @@ export default function App() {
   if (!user) {
     const userAgent = navigator.userAgent || navigator.vendor || (window as any).opera;
     const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone === true;
-    const isIOSWebView = /(iPhone|iPod|iPad).*AppleWebKit(?!.*Safari)/i.test(userAgent) && !isStandalone;
-    const isAndroidWebView = (userAgent.includes('wv') || (userAgent.includes('Android') && userAgent.includes('Version/'))) && !isStandalone;
-    const isSocialApp = userAgent.includes('Instagram') || userAgent.includes('FBAN') || userAgent.includes('FBAV');
-    const isWebView = isIOSWebView || isAndroidWebView || isSocialApp;
+    const isWebView = isBlockedInAppBrowser();
 
     return (
       <div className="min-h-[100dvh] bg-slate-50 flex flex-col items-center justify-center p-4">
@@ -1273,18 +1270,20 @@ export default function App() {
               </button>
             </div>
           ) : (
-            <button
-              onClick={handleSignIn}
-              disabled={isLoggingIn}
-              className="w-full py-4 bg-slate-900 text-white rounded-2xl font-semibold hover:bg-slate-800 transition-all flex items-center justify-center gap-3 active:scale-95 disabled:opacity-70"
-            >
-              {isLoggingIn ? (
-                <RefreshCw className="w-5 h-5 animate-spin" />
-              ) : (
-                <img src="https://www.google.com/favicon.ico" className="w-5 h-5" alt="Google" />
-              )}
-              {isLoggingIn ? 'Iniciando login...' : 'Entrar com Google'}
-            </button>
+            <div className="space-y-4">
+              <button
+                onClick={handleSignIn}
+                disabled={isLoggingIn}
+                className="w-full py-4 bg-slate-900 text-white rounded-2xl font-semibold hover:bg-slate-800 transition-all flex items-center justify-center gap-3 active:scale-95 disabled:opacity-70"
+              >
+                {isLoggingIn ? (
+                  <RefreshCw className="w-5 h-5 animate-spin" />
+                ) : (
+                  <img src="https://www.google.com/favicon.ico" className="w-5 h-5" alt="Google" />
+                )}
+                {isLoggingIn ? 'Iniciando login...' : (isNativeApp() ? 'Acessar dentro do aplicativo' : 'Entrar com Google')}
+              </button>
+            </div>
           )}
 
           {authErrorMessage && (
@@ -1296,16 +1295,16 @@ export default function App() {
           
           {!isWebView && (
             <div className="pt-4 border-t border-slate-100">
-              <p className="text-sm text-slate-500 mb-2">Problemas no login?</p>
+              <p className="text-sm text-slate-500 mb-2">Alternativas de acesso</p>
               <div className="space-y-3">
                 <button 
-                  onClick={() => window.open(window.location.href, '_blank')}
-                  className="w-full py-3 border-2 border-blue-100 text-blue-600 rounded-2xl text-sm font-bold hover:bg-blue-50 transition-all flex items-center justify-center gap-2"
+                  onClick={() => window.open(window.location.href, isNativeApp() ? '_system' : '_blank')}
+                  className="w-full py-3 border-2 border-slate-200 text-slate-600 rounded-2xl text-sm font-bold hover:bg-slate-50 transition-all flex items-center justify-center gap-2"
                 >
-                  Abrir em nova aba <ExternalLink className="w-4 h-4" />
+                  Abrir no navegador externo <ExternalLink className="w-4 h-4" />
                 </button>
                 <p className="text-[10px] text-slate-400">
-                  Dica: Em dispositivos móveis, o login pode ser bloqueado pelo navegador. Abrir em uma nova aba resolve a maioria dos problemas.
+                  Dica: Em dispositivos móveis, o login pode ser bloqueado pelo navegador. Abrir no navegador externo resolve a maioria dos problemas.
                 </p>
               </div>
             </div>
@@ -3351,7 +3350,7 @@ function TaskCard({ task, subjects, onToggle, onDelete, onMove, onConfigureRemin
               className="text-[11px] text-blue-600 hover:text-blue-700 bg-blue-50 px-2.5 py-1 rounded-lg flex items-center gap-1 font-bold transition-colors"
             >
               <ExternalLink className="w-3 h-3" />
-              Classroom
+              Ver no Google Classroom
             </a>
           )}
           {task.lastSyncAt && (
