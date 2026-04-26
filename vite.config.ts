@@ -14,9 +14,9 @@ export default defineConfig(({mode}) => {
         registerType: 'autoUpdate',
         includeAssets: ['favicon.ico', 'pwa-icon.svg'],
         manifest: {
-          name: 'Agende Tarefas',
-          short_name: 'Agende Tarefas',
-          description: 'Organize sua vida acadêmica e pessoal com inteligência.',
+          name: 'Agenda Escolar',
+          short_name: 'Agenda Escolar',
+          description: 'Organize tarefas, estudos e compromissos escolares com inteligência.',
           theme_color: '#ffffff',
           background_color: '#ffffff',
           display: 'standalone',
@@ -51,7 +51,7 @@ export default defineConfig(({mode}) => {
     },
     server: {
       // HMR is disabled in AI Studio via DISABLE_HMR env var.
-      // Do not modifyâfile watching is disabled to prevent flickering during agent edits.
+      // Do not modify—file watching is disabled to prevent flickering during agent edits.
       hmr: process.env.DISABLE_HMR !== 'true',
     },
   };
