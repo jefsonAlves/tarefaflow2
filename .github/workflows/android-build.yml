@@ -41,12 +41,12 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
-
-      - name: Regenerate Gradle Wrapper
+      - name: Setup Manual Gradle and Regenerate Wrapper
         working-directory: ./android
-        run: gradle wrapper --gradle-version 8.10.2 --distribution-type all
+        run: |
+          wget https://services.gradle.org/distributions/gradle-8.10.2-bin.zip -P /tmp
+          unzip -d /tmp /tmp/gradle-8.10.2-bin.zip
+          /tmp/gradle-8.10.2/bin/gradle wrapper --gradle-version 8.10.2 --distribution-type all
 
       - name: Make gradlew executable
         run: chmod +x android/gradlew
