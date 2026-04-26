@@ -1,0 +1,6 @@
+{
+	"appId": "br.com.jefson.tarefaflow",
+	"appName": "TarefaFlow",
+	"webDir": "dist",
+	"bundledWebRuntime": false
+}
