@@ -44,9 +44,9 @@ jobs:
       - name: Setup Manual Gradle and Regenerate Wrapper
         working-directory: ./android
         run: |
-          wget https://services.gradle.org/distributions/gradle-8.10.2-bin.zip -P /tmp
-          unzip -d /tmp /tmp/gradle-8.10.2-bin.zip
-          /tmp/gradle-8.10.2/bin/gradle wrapper --gradle-version 8.10.2 --distribution-type all
+          wget https://services.gradle.org/distributions/gradle-8.13-bin.zip -P /tmp
+          unzip -d /tmp /tmp/gradle-8.13-bin.zip
+          /tmp/gradle-8.13/bin/gradle wrapper --gradle-version 8.13 --distribution-type all
 
       - name: Make gradlew executable
         run: chmod +x android/gradlew
@@ -55,18 +55,8 @@ jobs:
         working-directory: ./android
         run: ./gradlew assembleDebug
 
-      - name: Build Android Release AAB
-        working-directory: ./android
-        run: ./gradlew bundleRelease
-
       - name: Upload Debug APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: app-debug-apk
           path: android/app/build/outputs/apk/debug/**/*.apk
-
-      - name: Upload Release AAB Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: app-release-aab
-          path: android/app/build/outputs/bundle/release/**/*.aab
