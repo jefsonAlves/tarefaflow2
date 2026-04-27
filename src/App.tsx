@@ -1360,7 +1360,7 @@ export default function App() {
 
   const handleSyncToCalendar = async (task: Task) => {
     if (!accessToken) {
-      setAuthErrorMessage("Para sincronizar tarefas com o Google Agenda, é necessário conectar sua conta Google.");
+      setAuthErrorMessage("Faça login novamente com Google para permitir a sincronização com Agenda e Classroom.");
       setShowAuthModal(true);
       return;
     }
@@ -1397,7 +1397,7 @@ export default function App() {
             res.status === 401) {
           setAccessToken(null);
           localStorage.removeItem('google_access_token');
-          setAuthErrorMessage("Sua sessão do Google Calendar expirou ou as permissões são insuficientes. Por favor, reconecte sua conta.");
+          setAuthErrorMessage("Faça login novamente com Google para permitir a sincronização com Agenda e Classroom.");
           setShowAuthModal(true);
         } else {
           showToast(`Erro ao sincronizar calendário: ${msg}`, 'error');
@@ -1424,7 +1424,7 @@ export default function App() {
   const syncGoogleTasks = async () => {
     if (!user || !accessToken) {
       if (!accessToken) {
-        setAuthErrorMessage("Conecte sua conta Google para sincronizar tarefas.");
+        setAuthErrorMessage("Faça login novamente com Google para permitir a sincronização com Agenda e Classroom.");
         setShowAuthModal(true);
       }
       return;
@@ -1576,7 +1576,7 @@ export default function App() {
       console.error("Sync error:", errorMessage);
       
       if (errorMessage.includes("401") || errorMessage.includes("403")) {
-        setAuthErrorMessage("Sua sessão do Google expirou ou permissões são insuficientes. Reconecte sua conta.");
+        setAuthErrorMessage("Faça login novamente com Google para permitir a sincronização com Agenda e Classroom.");
         setShowAuthModal(true);
       }
       
@@ -1599,7 +1599,7 @@ export default function App() {
   const syncClassroom = async () => {
     if (!user || !accessToken) {
       if (!accessToken) {
-        setAuthErrorMessage("Para sincronizar com o Google Classroom, você precisa conectar sua conta Google.");
+        setAuthErrorMessage("Faça login novamente com Google para permitir a sincronização com Agenda e Classroom.");
         setShowAuthModal(true);
       }
       return;
@@ -1889,7 +1889,7 @@ export default function App() {
       if (errorMessage.includes("invalid authentication credentials") || errorMessage.includes("Expected OAuth 2 access token") || errorMessage.includes("Permissão insuficiente")) {
         setAccessToken(null);
         localStorage.removeItem('google_access_token');
-        setAuthErrorMessage(errorMessage.includes("Permissão insuficiente") ? errorMessage : "Sua sessão do Google expirou. Por favor, reconecte sua conta para sincronizar.");
+        setAuthErrorMessage(errorMessage.includes("Permissão insuficiente") ? errorMessage : "Faça login novamente com Google para permitir a sincronização com Agenda e Classroom.");
         setShowAuthModal(true);
         return;
       }
@@ -1914,7 +1914,7 @@ export default function App() {
           errorMessage.toLowerCase().includes("credentials")) {
         setAccessToken(null);
         localStorage.removeItem('google_access_token');
-        setAuthErrorMessage("Sua sessão do Google expirou ou as permissões são insuficientes. Por favor, reconecte sua conta.");
+        setAuthErrorMessage("Faça login novamente com Google para permitir a sincronização com Agenda e Classroom.");
         setShowAuthModal(true);
       }
     } finally {
@@ -2667,7 +2667,7 @@ export default function App() {
                   body: JSON.stringify({ accessToken, task })
                 }).catch(err => console.error("Error syncing to Google Tasks:", err));
               } else {
-                setAuthErrorMessage("Sua sessão do Google expirou. Reconecte para salvar no Google Agenda.");
+                setAuthErrorMessage("Faça login novamente com Google para permitir a sincronização com Agenda e Classroom.");
                 setShowAuthModal(true);
               }
             }}

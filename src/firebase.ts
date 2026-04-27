@@ -16,17 +16,21 @@ export { collection, doc, setDoc, getDoc, onSnapshot, query, where, orderBy, get
 export const googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({ prompt: 'select_account' });
 
+const GOOGLE_SCOPES = [
+  'https://www.googleapis.com/auth/classroom.courses.readonly',
+  'https://www.googleapis.com/auth/classroom.announcements.readonly',
+  'https://www.googleapis.com/auth/classroom.coursework.me.readonly',
+  'https://www.googleapis.com/auth/classroom.coursework.me',
+  'https://www.googleapis.com/auth/classroom.coursework.students.readonly',
+  'https://www.googleapis.com/auth/classroom.student-submissions.me.readonly',
+  'https://www.googleapis.com/auth/classroom.student-submissions.students.readonly',
+  'https://www.googleapis.com/auth/classroom.rosters.readonly',
+  'https://www.googleapis.com/auth/tasks',
+  'https://www.googleapis.com/auth/calendar'
+];
+
 // Add Classroom and Tasks scopes
-googleProvider.addScope('https://www.googleapis.com/auth/classroom.courses.readonly');
-googleProvider.addScope('https://www.googleapis.com/auth/classroom.announcements.readonly');
-googleProvider.addScope('https://www.googleapis.com/auth/classroom.coursework.me.readonly');
-googleProvider.addScope('https://www.googleapis.com/auth/classroom.coursework.me');
-googleProvider.addScope('https://www.googleapis.com/auth/classroom.coursework.students.readonly');
-googleProvider.addScope('https://www.googleapis.com/auth/classroom.student-submissions.me.readonly');
-googleProvider.addScope('https://www.googleapis.com/auth/classroom.student-submissions.students.readonly');
-googleProvider.addScope('https://www.googleapis.com/auth/classroom.rosters.readonly');
-googleProvider.addScope('https://www.googleapis.com/auth/tasks');
-googleProvider.addScope('https://www.googleapis.com/auth/calendar');
+GOOGLE_SCOPES.forEach(scope => googleProvider.addScope(scope));
 
 export const isNativeApp = () => Capacitor.isNativePlatform();
 
@@ -54,7 +58,9 @@ export const signIn = async () => {
     if (isNativeApp()) {
       // Usamos o plugin '@capacitor-firebase/authentication' para login nativo seguro.
       // Ele gerencia o fluxo OAuth diretamente sem problemas de localhost + webview.
-      const result = await FirebaseAuthentication.signInWithGoogle();
+      const result = await FirebaseAuthentication.signInWithGoogle({
+        scopes: GOOGLE_SCOPES
+      });
       if (!result.credential?.idToken) {
         throw new Error("No ID Token received from Google Sign In");
       }
