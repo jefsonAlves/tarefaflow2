@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "537809046235",
+    "project_id": "projetojefson",
+    "storage_bucket": "projetojefson.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:537809046235:android:96ee0068dabc5fa9ef9afe",
+        "android_client_info": {
+          "package_name": "br.com.jefson.tarefaflow"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "537809046235-4tthprnvgbpqsarqog4rjf8ai7tjr3gm.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "br.com.jefson.tarefaflow",
+            "certificate_hash": "82b7bbd5dd17ffcf3cc728718fa97c7e9e6c5018"
+          }
+        },
+        {
+          "client_id": "537809046235-a8t0fetlamfpfvh3ug2sj23b4j9uadn6.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyArOy3qc97V6XerCeFVPA_r-knobeVJhGg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "537809046235-a8t0fetlamfpfvh3ug2sj23b4j9uadn6.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
