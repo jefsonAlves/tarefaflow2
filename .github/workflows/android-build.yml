@@ -63,6 +63,16 @@ jobs:
           ./gradlew clean
           ./gradlew assembleDebug
 
+      - name: Print Debug Signing SHA Fingerprints
+        run: |
+          echo "===== FIREBASE DEBUG SIGNING FINGERPRINTS ====="
+          keytool -list -v \
+            -alias androiddebugkey \
+            -keystore "$HOME/.android/debug.keystore" \
+            -storepass android \
+            -keypass android | grep -E "SHA1:|SHA256:" || true
+          echo "===== END FIREBASE DEBUG SIGNING FINGERPRINTS ====="
+
       - name: Upload Debug APK Artifact
         uses: actions/upload-artifact@v4
         with:
