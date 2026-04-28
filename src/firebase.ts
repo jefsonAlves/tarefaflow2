@@ -34,6 +34,7 @@ GOOGLE_SCOPES.forEach(scope => googleProvider.addScope(scope));
 const ANDROID_LOGIN_SOURCE = 'android-login';
 const ANDROID_CALLBACK_SCHEME = 'br.com.jefson.tarefaflow';
 const WEB_LOGIN_ORIGIN = 'https://tarefaflow2.vercel.app';
+const BRIDGE_ATTEMPT_KEY = 'tarefaflow_android_login_bridge_started';
 
 export const isNativeApp = () => Capacitor.isNativePlatform();
 
@@ -56,7 +57,7 @@ export const isBlockedInAppBrowser = () => {
   return blockedBrowsers.some(browser => ua.includes(browser));
 };
 
-const isAndroidLoginBridge = () => {
+export const isAndroidLoginBridge = () => {
   try {
     return new URLSearchParams(window.location.search).get('source') === ANDROID_LOGIN_SOURCE;
   } catch {
@@ -127,6 +128,12 @@ export const signIn = async () => {
       return { user: null, accessToken: null };
     }
 
+    if (isAndroidLoginBridge()) {
+      sessionStorage.setItem(BRIDGE_ATTEMPT_KEY, '1');
+      await signInWithRedirect(auth, googleProvider);
+      return { user: null, accessToken: null };
+    }
+
     const result = await signInWithPopup(auth, googleProvider);
     const credential = GoogleAuthProvider.credentialFromResult(result);
     const accessToken = credential?.accessToken;
@@ -136,15 +143,10 @@ export const signIn = async () => {
       localStorage.setItem('google_access_token', accessToken);
     }
 
-    if (isAndroidLoginBridge()) {
-      window.location.href = buildAndroidCallbackUrl(idToken, accessToken);
-      return { user: result.user, accessToken };
-    }
-
     return { user: result.user, accessToken };
   } catch (error: any) {
     console.error('Google auth failed:', error);
-    if (!isNativeApp() && (error.code === 'auth/popup-blocked' || (error.message && error.message.includes('popup')))) {
+    if (!isNativeApp() && !isAndroidLoginBridge() && (error.code === 'auth/popup-blocked' || (error.message && error.message.includes('popup')))) {
       console.warn('Popup blocked, falling back to signInWithRedirect...');
       await signInWithRedirect(auth, googleProvider);
       return { user: null, accessToken: null };
@@ -168,10 +170,22 @@ export const handleRedirectResult = async () => {
       }
 
       if (isAndroidLoginBridge()) {
+        sessionStorage.removeItem(BRIDGE_ATTEMPT_KEY);
         window.location.href = buildAndroidCallbackUrl(idToken, accessToken);
       }
 
       return { user: result.user, accessToken };
+    }
+
+    if (isAndroidLoginBridge() && auth.currentUser) {
+      const cachedAccessToken = localStorage.getItem('google_access_token');
+      const idToken = await auth.currentUser.getIdToken(true);
+
+      if (cachedAccessToken) {
+        sessionStorage.removeItem(BRIDGE_ATTEMPT_KEY);
+        window.location.href = buildAndroidCallbackUrl(idToken, cachedAccessToken);
+        return { user: auth.currentUser, accessToken: cachedAccessToken };
+      }
     }
   } catch (error: any) {
     console.error('Error in getRedirectResult:', error);
@@ -183,3 +197,22 @@ export const handleRedirectResult = async () => {
   }
   return null;
 };
+
+const startAndroidLoginBridgeIfNeeded = () => {
+  if (typeof window === 'undefined') return;
+  if (Capacitor.isNativePlatform()) return;
+  if (!isAndroidLoginBridge()) return;
+
+  const alreadyStarted = sessionStorage.getItem(BRIDGE_ATTEMPT_KEY);
+  if (alreadyStarted) return;
+
+  sessionStorage.setItem(BRIDGE_ATTEMPT_KEY, '1');
+  setTimeout(() => {
+    signInWithRedirect(auth, googleProvider).catch(error => {
+      sessionStorage.removeItem(BRIDGE_ATTEMPT_KEY);
+      console.error('Android login bridge redirect failed:', error);
+    });
+  }, 300);
+};
+
+startAndroidLoginBridgeIfNeeded();
