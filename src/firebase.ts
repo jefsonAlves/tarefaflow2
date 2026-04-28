@@ -89,11 +89,11 @@ export const handleNativeAuthCallbackUrl = async (url: string) => {
   if (!url.startsWith(`${ANDROID_CALLBACK_SCHEME}://`)) return null;
 
   const { idToken, accessToken, source } = parseCallbackTokens(url);
-  if (source !== ANDROID_LOGIN_SOURCE || !idToken) return null;
+  if (source !== ANDROID_LOGIN_SOURCE || (!idToken && !accessToken)) return null;
 
   localStorage.setItem(NATIVE_LOGIN_IN_PROGRESS_KEY, '1');
 
-  const credential = GoogleAuthProvider.credential(idToken, accessToken || undefined);
+  const credential = GoogleAuthProvider.credential(idToken || null, accessToken || null);
   const authResult = await signInWithCredential(auth, credential);
 
   if (accessToken) {
@@ -117,10 +117,10 @@ const processNativeLaunchUrl = async () => {
   try {
     const launch = await App.getLaunchUrl();
     if (launch?.url) {
-      const result = await handleNativeAuthCallbackUrl(launch.url);
-      if (result) window.location.replace('/');
+      await handleNativeAuthCallbackUrl(launch.url);
     }
   } catch (error) {
+    localStorage.removeItem(NATIVE_LOGIN_IN_PROGRESS_KEY);
     console.error('Native launch URL auth processing failed:', error);
   }
 };
@@ -128,8 +128,7 @@ const processNativeLaunchUrl = async () => {
 if (Capacitor.isNativePlatform()) {
   App.addListener('appUrlOpen', async ({ url }) => {
     try {
-      const result = await handleNativeAuthCallbackUrl(url);
-      if (result) window.location.replace('/');
+      await handleNativeAuthCallbackUrl(url);
     } catch (error) {
       localStorage.removeItem(NATIVE_LOGIN_IN_PROGRESS_KEY);
       console.error('Native auth callback failed:', error);
@@ -180,7 +179,7 @@ export const handleRedirectResult = async () => {
     if (result) {
       const credential = GoogleAuthProvider.credentialFromResult(result);
       const accessToken = credential?.accessToken;
-      const idToken = credential?.idToken || await result.user.getIdToken();
+      const idToken = credential?.idToken || null;
 
       if (accessToken) localStorage.setItem('google_access_token', accessToken);
 
@@ -194,10 +193,9 @@ export const handleRedirectResult = async () => {
 
     if (isAndroidLoginBridge() && auth.currentUser) {
       const cachedAccessToken = localStorage.getItem('google_access_token');
-      const idToken = await auth.currentUser.getIdToken(true);
       if (cachedAccessToken) {
         sessionStorage.removeItem(BRIDGE_ATTEMPT_KEY);
-        window.location.href = buildAndroidCallbackUrl(idToken, cachedAccessToken);
+        window.location.href = buildAndroidCallbackUrl(null, cachedAccessToken);
         return { user: auth.currentUser, accessToken: cachedAccessToken };
       }
     }
