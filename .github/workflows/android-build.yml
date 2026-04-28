@@ -65,12 +65,20 @@ jobs:
 
       - name: Print Debug Signing SHA Fingerprints
         run: |
-          echo "===== FIREBASE DEBUG SIGNING FINGERPRINTS ====="
+          echo "===== FIREBASE DEBUG SIGNING FINGERPRINTS FROM APK ====="
+          APK_PATH=$(find android/app/build/outputs/apk/debug -name "*.apk" | head -n 1)
+          echo "APK path: $APK_PATH"
+          APKSIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner | sort -V | tail -n 1)
+          echo "apksigner path: $APKSIGNER"
+          "$APKSIGNER" verify --print-certs "$APK_PATH" || true
+          echo "===== FIREBASE DEBUG SIGNING FINGERPRINTS FROM DEBUG KEYSTORE ====="
+          echo "Debug keystore path: $HOME/.android/debug.keystore"
+          ls -la "$HOME/.android" || true
           keytool -list -v \
             -alias androiddebugkey \
             -keystore "$HOME/.android/debug.keystore" \
             -storepass android \
-            -keypass android | grep -E "SHA1:|SHA256:" || true
+            -keypass android || true
           echo "===== END FIREBASE DEBUG SIGNING FINGERPRINTS ====="
 
       - name: Upload Debug APK Artifact
