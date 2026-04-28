@@ -201,6 +201,68 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [initializationError, setInitializationError] = useState<string | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [activeTab, setActiveTab] = useState<string>(() => {
+    try {
+      return localStorage.getItem('active_tab') || 'home';
+    } catch (e) {
+      return 'home';
+    }
+  });
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [authErrorMessage, setAuthErrorMessage] = useState('');
+
+  useEffect(() => {
+    const handleGoogleTokenUpdated = (event: any) => {
+      const token =
+        event.detail?.accessToken ||
+        localStorage.getItem('google_access_token');
+
+      if (token) {
+        setAccessToken(token);
+        localStorage.setItem('google_access_token', token);
+      }
+
+      if (event.detail?.user) {
+        setUser(event.detail.user);
+      }
+
+      setActiveTab('home');
+      localStorage.setItem('active_tab', 'home');
+      setLoading(false);
+      setIsLoggingIn(false);
+      setShowAuthModal(false);
+      setAuthErrorMessage('');
+      localStorage.setItem('tarefaflow_native_login_in_progress', '0');
+    };
+
+    window.addEventListener('google-access-token-updated', handleGoogleTokenUpdated);
+
+    return () => {
+      window.removeEventListener('google-access-token-updated', handleGoogleTokenUpdated);
+    };
+  }, []);
+
+  useEffect(() => {
+    try {
+      const savedToken = localStorage.getItem('google_access_token');
+
+      if (savedToken) {
+        setAccessToken(savedToken);
+      }
+    } catch (error) {
+      console.warn('Não foi possível recuperar google_access_token:', error);
+    }
+  }, []);
+
+  useEffect(() => {
+    console.log('AUTH DEBUG', {
+      hasUser: !!user,
+      hasAccessTokenState: !!accessToken,
+      hasAccessTokenStorage: !!localStorage.getItem('google_access_token'),
+      activeTab: localStorage.getItem('active_tab'),
+      nativeLoginInProgress: localStorage.getItem('tarefaflow_native_login_in_progress')
+    });
+  }, [user, accessToken]);
 
   // New: Announcements notification
   useEffect(() => {
@@ -337,20 +399,11 @@ export default function App() {
   const [isSyncingTasks, setIsSyncingTasks] = useState(false);
   const [syncProgress, setSyncProgress] = useState({ current: 0, total: 0, message: '' });
   const [isSyncingCalendar, setIsSyncingCalendar] = useState(false);
-  const [activeTab, setActiveTab] = useState<string>(() => {
-    try {
-      return localStorage.getItem('active_tab') || 'home';
-    } catch (e) {
-      return 'home';
-    }
-  });
   const [activeInAppNotifications, setActiveInAppNotifications] = useState<{ id: string; task: Task }[]>([]);
   const [taskToReschedule, setTaskToReschedule] = useState<Task | null>(null);
   const [roleFilter, setRoleFilter] = useState<'all' | 'student' | 'teacher'>('all');
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [showDiagnostics, setShowDiagnostics] = useState(false);
-  const [showAuthModal, setShowAuthModal] = useState(false);
-  const [authErrorMessage, setAuthErrorMessage] = useState('');
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [showInstallPrompt, setShowInstallPrompt] = useState(false);
 
@@ -503,6 +556,12 @@ export default function App() {
       }
       
       if (u) {
+        const savedToken = localStorage.getItem('google_access_token');
+        if (savedToken) {
+          setAccessToken(savedToken);
+        }
+        setActiveTab(localStorage.getItem('active_tab') || 'home');
+
         try {
           const userDocRef = doc(db, 'users', u.uid);
           const userDocSnap = await getDoc(userDocRef);
@@ -539,6 +598,7 @@ export default function App() {
       }
       
       setLoading(false);
+      localStorage.setItem('tarefaflow_native_login_in_progress', '0');
       clearTimeout(timeoutId);
     });
     
@@ -726,6 +786,8 @@ export default function App() {
         }
       }
     } catch (e: any) {
+      setIsLoggingIn(false);
+      localStorage.setItem('tarefaflow_native_login_in_progress', '0');
       console.error("Sign-in error details:", {
         code: e.code,
         message: e.message,
@@ -852,14 +914,14 @@ export default function App() {
           fetch('/api/google/calendar/delete', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ accessToken, eventId: task.calendarEventId })
+            body: JSON.stringify({ accessToken: accessToken || localStorage.getItem("google_access_token"), eventId: task.calendarEventId })
           }).catch(e => console.error("Calendar Delete Error:", e));
         }
         if (task.externalId) {
           fetch('/api/google/tasks/delete', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ accessToken, externalId: task.externalId })
+            body: JSON.stringify({ accessToken: accessToken || localStorage.getItem("google_access_token"), externalId: task.externalId })
           }).catch(e => console.error("Tasks Delete Error:", e));
         }
       }
@@ -1207,31 +1269,36 @@ export default function App() {
     }
   };
 
-  if (loading) {
+  if (loading || localStorage.getItem('tarefaflow_native_login_in_progress') === '1') {
     return (
-      <div className="min-h-[100dvh] bg-slate-50 flex flex-col items-center justify-center p-6 text-center">
-        <motion.div 
-          animate={{ rotate: 360 }}
-          transition={{ repeat: Infinity, duration: 1, ease: "linear" }}
-          className="mb-4"
-        >
-          <RefreshCw className="w-10 h-10 text-blue-600" />
-        </motion.div>
-        <h2 className="text-xl font-semibold text-slate-800">Iniciando Agende Tarefas...</h2>
-        <p className="text-slate-500 mt-2 max-w-xs">Isso pode levar alguns segundos dependendo da sua conexão.</p>
-        
-        {initializationError && (
-          <div className="mt-6 p-4 bg-red-50 text-red-600 rounded-2xl text-sm border border-red-100 max-w-xs">
-            <AlertCircle className="w-5 h-5 mx-auto mb-2" />
-            {initializationError}
-            <button 
-              onClick={() => window.location.reload()}
-              className="mt-3 block w-full py-2 bg-red-600 text-white rounded-xl font-bold"
-            >
-              Tentar Novamente
-            </button>
+      <div className="min-h-[100dvh] flex items-center justify-center bg-slate-50 p-6">
+        <div className="bg-white rounded-3xl shadow-xl p-8 max-w-sm w-full text-center">
+          <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-blue-600 text-white flex items-center justify-center text-2xl font-bold">
+            ✓
           </div>
-        )}
+          <h2 className="text-2xl font-bold text-slate-900">
+            Finalizando acesso com Google...
+          </h2>
+          <p className="text-slate-500 mt-3">
+            Aguarde enquanto validamos sua conta e abrimos o aplicativo.
+          </p>
+          
+          {initializationError && (
+            <div className="mt-6 p-4 bg-red-50 text-red-600 rounded-2xl text-sm border border-red-100 max-w-xs mx-auto">
+              <AlertCircle className="w-5 h-5 mx-auto mb-2" />
+              {initializationError}
+              <button 
+                onClick={() => {
+                  localStorage.setItem('tarefaflow_native_login_in_progress', '0');
+                  window.location.reload();
+                }}
+                className="mt-3 block w-full py-2 bg-red-600 text-white rounded-xl font-bold"
+              >
+                Tentar Novamente
+              </button>
+            </div>
+          )}
+        </div>
       </div>
     );
   }
@@ -1312,7 +1379,7 @@ export default function App() {
             </div>
           )}
           
-          {!isWebView && (
+          {!isWebView && !isNativeApp() && (
             <div className="pt-4 border-t border-slate-100">
               <p className="text-sm text-slate-500 mb-2">Alternativas de acesso</p>
               <div className="space-y-3">
@@ -1359,7 +1426,8 @@ export default function App() {
   };
 
   const handleSyncToCalendar = async (task: Task) => {
-    if (!accessToken) {
+    const activeToken = accessToken || localStorage.getItem('google_access_token');
+    if (!activeToken) {
       setAuthErrorMessage("Faça login novamente com Google para permitir a sincronização com Agenda e Classroom.");
       setShowAuthModal(true);
       return;
@@ -1369,12 +1437,13 @@ export default function App() {
   };
 
   const syncGoogleCalendar = async (task: Task) => {
-    if (!user || !accessToken) return;
+    const activeToken = accessToken || localStorage.getItem('google_access_token');
+    if (!user || !activeToken) return;
     try {
       const res = await fetchWithRetry('/api/google/calendar/sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ accessToken, task })
+        body: JSON.stringify({ accessToken: activeToken, task })
       });
       const data = await res.json();
       
@@ -1422,8 +1491,9 @@ export default function App() {
   };
 
   const syncGoogleTasks = async () => {
-    if (!user || !accessToken) {
-      if (!accessToken) {
+    const activeToken = accessToken || localStorage.getItem('google_access_token');
+    if (!user || !activeToken) {
+      if (!activeToken) {
         setAuthErrorMessage("Faça login novamente com Google para permitir a sincronização com Agenda e Classroom.");
         setShowAuthModal(true);
       }
@@ -1438,7 +1508,7 @@ export default function App() {
       const res = await fetchWithRetry('/api/google/tasks/list', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ accessToken })
+        body: JSON.stringify({ accessToken: activeToken })
       });
 
       if (!res.ok) {
@@ -1513,7 +1583,7 @@ export default function App() {
             await fetchWithRetry('/api/google/tasks/sync', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ accessToken, task: localTask })
+              body: JSON.stringify({ accessToken: accessToken || localStorage.getItem("google_access_token"), task: localTask })
             });
             try {
               await updateDoc(doc(db, 'tasks', localTask.id), {
@@ -1535,7 +1605,7 @@ export default function App() {
               await fetchWithRetry('/api/google/calendar/delete', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ accessToken, eventId: lTask.calendarEventId })
+                body: JSON.stringify({ accessToken: accessToken || localStorage.getItem("google_access_token"), eventId: lTask.calendarEventId })
               });
             }
           } catch (e) {
@@ -1549,7 +1619,7 @@ export default function App() {
         const syncRes = await fetchWithRetry('/api/google/tasks/sync', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ accessToken, task: lTask })
+          body: JSON.stringify({ accessToken: accessToken || localStorage.getItem("google_access_token"), task: lTask })
         });
         
         if (syncRes.ok) {
@@ -1597,8 +1667,9 @@ export default function App() {
     }
   };
   const syncClassroom = async () => {
-    if (!user || !accessToken) {
-      if (!accessToken) {
+    const activeToken = accessToken || localStorage.getItem('google_access_token');
+    if (!user || !activeToken) {
+      if (!activeToken) {
         setAuthErrorMessage("Faça login novamente com Google para permitir a sincronização com Agenda e Classroom.");
         setShowAuthModal(true);
       }
@@ -1615,7 +1686,7 @@ export default function App() {
       const coursesRes = await fetchWithRetry('/api/google/classroom/courses', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ accessToken })
+        body: JSON.stringify({ accessToken: accessToken || localStorage.getItem("google_access_token") })
       });
       const coursesData = await coursesRes.json();
 
@@ -1643,7 +1714,7 @@ export default function App() {
           const courseworkRes = await fetchWithRetry('/api/google/classroom/coursework', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ accessToken, courseId: course.id })
+            body: JSON.stringify({ accessToken: accessToken || localStorage.getItem("google_access_token"), courseId: course.id })
           });
           const courseworkData = await courseworkRes.json();
 
@@ -1704,7 +1775,7 @@ export default function App() {
                 const subRes = await fetchWithRetry('/api/google/classroom/submissions', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ accessToken, courseId: course.id, courseWorkId: work.id, role })
+                  body: JSON.stringify({ accessToken: accessToken || localStorage.getItem("google_access_token"), courseId: course.id, courseWorkId: work.id, role })
                 });
                 const subData = await subRes.json();
                 if (!subRes.ok) {
@@ -1807,7 +1878,7 @@ export default function App() {
             const annRes = await fetchWithRetry('/api/google/classroom/announcements', {
                method: 'POST',
                headers: { 'Content-Type': 'application/json' },
-               body: JSON.stringify({ accessToken, courseId: course.id })
+               body: JSON.stringify({ accessToken: accessToken || localStorage.getItem("google_access_token"), courseId: course.id })
             });
             const annData = await annRes.json();
             
@@ -2664,7 +2735,7 @@ export default function App() {
                 fetch('/api/google/tasks/sync', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ accessToken, task })
+                  body: JSON.stringify({ accessToken: accessToken || localStorage.getItem("google_access_token"), task })
                 }).catch(err => console.error("Error syncing to Google Tasks:", err));
               } else {
                 setAuthErrorMessage("Faça login novamente com Google para permitir a sincronização com Agenda e Classroom.");
@@ -3465,7 +3536,7 @@ function CreateTaskModal({ onClose, userId, categories, setCategories, onTaskCre
           const res = await fetch('/api/google/calendar/sync', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ accessToken, task: { id: docRef.id, ...taskData } })
+            body: JSON.stringify({ accessToken: accessToken || localStorage.getItem("google_access_token"), task: { id: docRef.id, ...taskData } })
           });
           const data = await res.json();
           calendarEventId = data.calendarEventId;
