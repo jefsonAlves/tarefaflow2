@@ -33,6 +33,7 @@ GOOGLE_SCOPES.forEach(scope => googleProvider.addScope(scope));
 
 const ANDROID_LOGIN_SOURCE = 'android-login';
 const ANDROID_CALLBACK_SCHEME = 'br.com.jefson.tarefaflow';
+const ANDROID_PACKAGE_NAME = 'br.com.jefson.tarefaflow';
 const WEB_LOGIN_ORIGIN = 'https://tarefaflow2.vercel.app';
 const BRIDGE_ATTEMPT_KEY = 'tarefaflow_android_login_bridge_started';
 
@@ -72,11 +73,15 @@ const buildAndroidCallbackUrl = (idToken?: string | null, accessToken?: string |
   if (idToken) params.set('id_token', idToken);
   if (accessToken) params.set('access_token', accessToken);
   params.set('source', ANDROID_LOGIN_SOURCE);
-  return `${ANDROID_CALLBACK_SCHEME}://auth#${params.toString()}`;
+
+  // Use Android intent:// instead of direct custom-scheme navigation.
+  // Chrome may show ERR_UNKNOWN_URL_SCHEME for br.com.jefson.tarefaflow://auth directly.
+  // intent:// reliably asks Android to hand the callback to the installed app package.
+  return `intent://auth?${params.toString()}#Intent;scheme=${ANDROID_CALLBACK_SCHEME};package=${ANDROID_PACKAGE_NAME};end`;
 };
 
 const parseCallbackTokens = (url: string) => {
-  const raw = url.includes('#') ? url.split('#')[1] : url.split('?')[1];
+  const raw = url.includes('?') ? url.split('?')[1].split('#')[0] : url.split('#')[1];
   const params = new URLSearchParams(raw || '');
   return {
     idToken: params.get('id_token'),
