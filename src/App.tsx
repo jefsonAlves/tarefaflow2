@@ -210,6 +210,9 @@ export default function App() {
   });
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [authErrorMessage, setAuthErrorMessage] = useState('');
+  const [nativeLoginInProgress, setNativeLoginInProgress] = useState(() => {
+    return localStorage.getItem('tarefaflow_native_login_in_progress') === '1';
+  });
 
   useEffect(() => {
     const handleGoogleTokenUpdated = (event: any) => {
@@ -233,6 +236,7 @@ export default function App() {
       setShowAuthModal(false);
       setAuthErrorMessage('');
       localStorage.setItem('tarefaflow_native_login_in_progress', '0');
+      setNativeLoginInProgress(false);
     };
 
     window.addEventListener('google-access-token-updated', handleGoogleTokenUpdated);
@@ -559,6 +563,8 @@ export default function App() {
         const savedToken = localStorage.getItem('google_access_token');
         if (savedToken) {
           setAccessToken(savedToken);
+          localStorage.setItem('tarefaflow_native_login_in_progress', '0');
+          setNativeLoginInProgress(false);
         }
         setActiveTab(localStorage.getItem('active_tab') || 'home');
 
@@ -598,12 +604,11 @@ export default function App() {
       }
       
       setLoading(false);
-      localStorage.setItem('tarefaflow_native_login_in_progress', '0');
       clearTimeout(timeoutId);
     });
     
     // Check for redirect result
-    handleRedirectResult().then((result) => {
+    handleRedirectResult().then(async (result) => {
       if (result && result.user) {
         setUser(result.user);
         if (result.accessToken) {
@@ -614,6 +619,10 @@ export default function App() {
           if ('Notification' in window && Notification.permission === 'default') {
             Notification.requestPermission();
           }
+        }
+        if (window.location.search.includes('source=android-login')) {
+          const idToken = await result.user.getIdToken();
+          window.location.href = `br.com.jefson.tarefaflow://auth?id_token=${idToken}&access_token=${result.accessToken || ''}`;
         }
       }
     }).catch((e: any) => {
@@ -628,7 +637,17 @@ export default function App() {
     };
   }, []);
 
-  // Admin Data Fetching
+  useEffect(() => {
+    if (user && window.location.search.includes('source=android-login')) {
+      const returnToApp = async () => {
+        const idToken = await user.getIdToken();
+        const storedAccessToken = accessToken || localStorage.getItem('google_access_token');
+        window.location.href = `br.com.jefson.tarefaflow://auth?id_token=${idToken}&access_token=${storedAccessToken || ''}`;
+      };
+      returnToApp();
+    }
+  }, [user, accessToken]);
+
   useEffect(() => {
     if (userProfile?.role_user === 'admin') {
       const unsubUsers = onSnapshot(collection(db, 'users'), (snapshot) => {
@@ -768,6 +787,10 @@ export default function App() {
     if (isLoggingIn) return;
     
     try {
+      if (isNativeApp()) {
+        setNativeLoginInProgress(true);
+        // localStorage is already set in signIn(), but also set state here
+      }
       // Must call signIn immediately in the event handler to preserve user gesture
       const result = await signIn();
       setIsLoggingIn(true);
@@ -788,6 +811,7 @@ export default function App() {
     } catch (e: any) {
       setIsLoggingIn(false);
       localStorage.setItem('tarefaflow_native_login_in_progress', '0');
+      setNativeLoginInProgress(false);
       console.error("Sign-in error details:", {
         code: e.code,
         message: e.message,
@@ -1269,7 +1293,7 @@ export default function App() {
     }
   };
 
-  if (loading || localStorage.getItem('tarefaflow_native_login_in_progress') === '1') {
+  if (loading || nativeLoginInProgress) {
     return (
       <div className="min-h-[100dvh] flex items-center justify-center bg-slate-50 p-6">
         <div className="bg-white rounded-3xl shadow-xl p-8 max-w-sm w-full text-center">
@@ -1283,6 +1307,17 @@ export default function App() {
             Aguarde enquanto validamos sua conta e abrimos o aplicativo.
           </p>
           
+          <button 
+            onClick={() => {
+              localStorage.setItem('tarefaflow_native_login_in_progress', '0');
+              setNativeLoginInProgress(false);
+              window.location.reload();
+            }}
+            className="mt-6 font-medium text-blue-600 hover:text-blue-800 text-sm"
+          >
+            Voltar para o Início
+          </button>
+          
           {initializationError && (
             <div className="mt-6 p-4 bg-red-50 text-red-600 rounded-2xl text-sm border border-red-100 max-w-xs mx-auto">
               <AlertCircle className="w-5 h-5 mx-auto mb-2" />
@@ -1290,6 +1325,7 @@ export default function App() {
               <button 
                 onClick={() => {
                   localStorage.setItem('tarefaflow_native_login_in_progress', '0');
+                  setNativeLoginInProgress(false);
                   window.location.reload();
                 }}
                 className="mt-3 block w-full py-2 bg-red-600 text-white rounded-xl font-bold"
@@ -1379,7 +1415,7 @@ export default function App() {
             </div>
           )}
           
-          {!isWebView && !isNativeApp() && (
+          {!isNativeApp() && !window.location.search.includes('source=android-login') && (
             <div className="pt-4 border-t border-slate-100">
               <p className="text-sm text-slate-500 mb-2">Alternativas de acesso</p>
               <div className="space-y-3">
@@ -1465,7 +1501,6 @@ export default function App() {
             msg.toLowerCase().includes("credentials") ||
             res.status === 401) {
           setAccessToken(null);
-          localStorage.removeItem('google_access_token');
           setAuthErrorMessage("Faça login novamente com Google para permitir a sincronização com Agenda e Classroom.");
           setShowAuthModal(true);
         } else {
@@ -1959,7 +1994,6 @@ export default function App() {
       
       if (errorMessage.includes("invalid authentication credentials") || errorMessage.includes("Expected OAuth 2 access token") || errorMessage.includes("Permissão insuficiente")) {
         setAccessToken(null);
-        localStorage.removeItem('google_access_token');
         setAuthErrorMessage(errorMessage.includes("Permissão insuficiente") ? errorMessage : "Faça login novamente com Google para permitir a sincronização com Agenda e Classroom.");
         setShowAuthModal(true);
         return;
@@ -1984,7 +2018,6 @@ export default function App() {
           errorMessage.toLowerCase().includes("auth") || 
           errorMessage.toLowerCase().includes("credentials")) {
         setAccessToken(null);
-        localStorage.removeItem('google_access_token');
         setAuthErrorMessage("Faça login novamente com Google para permitir a sincronização com Agenda e Classroom.");
         setShowAuthModal(true);
       }
